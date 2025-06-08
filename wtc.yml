@@ -1,0 +1,12 @@
+no_trace: false
+trig_async: [run]
+rules:
+  - name: run
+    match: \.go$
+    ignore: _test\.go$
+    command: go run main.go server
+  - name: test_all
+    command: go test -cover ./...
+  - name: test
+    match: _test\.go$
+    command: go test -cover {PKG}
