@@ -22,7 +22,7 @@ func main() {
 
 	app.Version = "1.0.6"
 	app.Description = "Code City metaphor for visualizing Go source code in 3D"
-	app.Copyright = "Rodrigo Brito (https://github.com/rodrigo-brito)"
+	app.Copyright = "Braulio Maldonado (https://github.com/ShinjiMC)"
 
 	app.Commands = []*cli.Command{
 		{

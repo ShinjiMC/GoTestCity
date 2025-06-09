@@ -1,51 +1,27 @@
-<img width="350" src="https://raw.githubusercontent.com/rodrigo-brito/gocity/master/pkg/server/assets/logo.png" alt="GoCity" />
+# Go Test City
 
-[![Actions Status](https://github.com/rodrigo-brito/gocity/workflows/tests/badge.svg)](https://github.com/rodrigo-brito/gocity/actions)
-[![codecov](https://codecov.io/gh/rodrigo-brito/gocity/branch/master/graph/badge.svg)](https://codecov.io/gh/rodrigo-brito/gocity)
-[![Go Report Card](https://goreportcard.com/badge/github.com/rodrigo-brito/gocity)](https://goreportcard.com/report/github.com/rodrigo-brito/gocity)
-[![GoDoc](https://godoc.org/github.com/rodrigo-brito/gocity?status.svg)](https://godoc.org/github.com/rodrigo-brito/gocity)
 <a href="https://opensource.org/licenses/MIT">
-  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License MIT">
+<img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License MIT">
 </a>
-<hr />
- 
-Available here: https://go-city.github.io
 
-Research Paper: [26th International Conference on Software Analysis, Evolution and Reengineering (SANER)](https://ieeexplore.ieee.org/document/8668008)
-<br>PDF Version: [ASERG Page](https://homepages.dcc.ufmg.br/~mtov/pub/2019-saner-gocity.pdf)
- 
-GoCity is an implementation of the Code City metaphor for visualizing source code. GoCity represents a Go program as a city, as follows: 
+---
 
- - Folders are districts
- - Files are buildings
- - Structs are represented as buildings on the top of their files.
+Go Test City is an extension of GoCity, which implements the Code City metaphor for visualizing source code. GoCity represents a Go program as a city, using the following concepts:
 
-## Structures Characteristics
+- Folders are districts
+- Files are buildings
+- Structs are represented as buildings placed on top of their corresponding files
 
- - The Number of Lines of Source Code (LOC) represents the build color (high values makes the building dark)
- - The Number of Variables (NOV) correlates to the building's base size.
- - The Number of methods (NOM) correlates to the building height.
- 
-## Installation
+## Structure Characteristics
 
-- `go install github.com/rodrigo-brito/gocity@latest`
-- Or just head to the [releases](https://github.com/rodrigo-brito/gocity/releases) page and download the latest version for you platform.
+- The number of lines of code (LOC) determines the building color (higher values result in darker buildings)
+- The number of variables (NOV) affects the building’s base size
+- The number of methods (NOM) influences the building height
 
-## Usage:
-- Online: https://go-city.github.io
-- Commands
-    - `gocity server` - Start server
-    - `gocity open <GITHUB_IMPORT>` - Open a specific Github project from github
-    - `gocity open ./my-project` - Open a local directory
- 
-## UI / Front-end
+## Author
 
-The UI is built with React and uses [babylon.js](https://www.babylonjs.com/) to plot 3D structures. The front-end source code is available in the [front-end](https://github.com/rodrigo-brito/gocity/tree/front-end) branch. 
- 
-### Related Works
-- [Code City](https://wettel.github.io/codecity.html) by [Richard Wettel](https://twitter.com/richardwettel)
-- [JS City](https://github.com/ASERG-UFMG/JSCity/wiki/JSCITY) by [Marcus Viana](https://github.com/malilovick).
+- **ShinjiMC** - [GitHub Profile](https://github.com/ShinjiMC)
 
-This tool makes part of a scientific research developed at Federal University of Minas Gerais (UFMG)<br/>
-Student: [Rodrigo Brito](https://github.com/rodrigo-brito)<br/>
-Advisor: [Marco Tulio Valente](https://homepages.dcc.ufmg.br/~mtov/)
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
