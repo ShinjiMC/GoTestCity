@@ -10,7 +10,7 @@ import (
 
 func TestNewAnalyzer(t *testing.T) {
 	t.Run("WithoutIgnoreList", func(t *testing.T) {
-		packageName := "github.com/rodrigo-brito/gocity"
+		packageName := "github.com/shinjimc/gotestcity"
 		branchName := "master"
 		tmpFolder := t.TempDir()
 		a := NewAnalyzer(packageName, branchName, tmpFolder)
@@ -23,7 +23,7 @@ func TestNewAnalyzer(t *testing.T) {
 	})
 
 	t.Run("WithIgnoreList", func(t *testing.T) {
-		packageName := "github.com/rodrigo-brito/gocity"
+		packageName := "github.com/shinjimc/gotestcity"
 		branchName := "master"
 		tmpFolder := t.TempDir()
 		ignoreList := []string{"/vendor/", "/third-party/", "/external/"}

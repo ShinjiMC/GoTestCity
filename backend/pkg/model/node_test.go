@@ -3,7 +3,7 @@ package model
 import (
 	"testing"
 
-	"github.com/rodrigo-brito/gocity/pkg/analyzer"
+	"github.com/shinjimc/gotestcity/pkg/analyzer"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -61,7 +61,7 @@ func TestNode_GenerateChildrenPosition(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
-	n := New(map[string]*analyzer.NodeInfo{"github.com/rodrigo-brito/gocity/blob/master/model/node.go.(Test)": {
+	n := New(map[string]*analyzer.NodeInfo{"github.com/shinjimc/gotestcity/blob/main/model/node.go.(Test)": {
 		File:       "main.go",
 		ObjectName: "main",
 		Line:       1,
@@ -75,7 +75,7 @@ func TestNew(t *testing.T) {
 	assert.Equal(t, n.Position.Y, float64(0))
 	assert.Equal(t, len(n.Children), 1)
 
-	n = New(map[string]*analyzer.NodeInfo{"github.com/rodrigo-brito/gocity/blob/master/model/node.go": {
+	n = New(map[string]*analyzer.NodeInfo{"github.com/shinjimc/gotestcity/blob/main/model/node.go": {
 		File:       "main.go",
 		ObjectName: "main",
 		Line:       1,

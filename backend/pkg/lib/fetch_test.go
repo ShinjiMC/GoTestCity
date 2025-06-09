@@ -22,7 +22,7 @@ func TestFetch(t *testing.T) {
 	})
 
 	t.Run("valid package", func(t *testing.T) {
-		path, err := f.Fetch("github.com/rodrigo-brito/gocity", "master")
+		path, err := f.Fetch("github.com/shinjimc/gotestcity", "master")
 		assert.NoError(t, err)
 		require.NotEmpty(t, path)
 	})

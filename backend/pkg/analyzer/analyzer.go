@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rodrigo-brito/gocity/pkg/lib"
+	"github.com/shinjimc/gotestcity/pkg/lib"
 	log "github.com/sirupsen/logrus"
 )
 

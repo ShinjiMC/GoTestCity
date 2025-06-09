@@ -9,10 +9,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/rodrigo-brito/gocity/pkg/analyzer"
-	"github.com/rodrigo-brito/gocity/pkg/lib"
-	"github.com/rodrigo-brito/gocity/pkg/model"
-	"github.com/rodrigo-brito/gocity/pkg/server/middlewares"
+	"github.com/shinjimc/gotestcity/pkg/analyzer"
+	"github.com/shinjimc/gotestcity/pkg/lib"
+	"github.com/shinjimc/gotestcity/pkg/model"
+	"github.com/shinjimc/gotestcity/pkg/server/middlewares"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"

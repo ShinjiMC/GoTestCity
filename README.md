@@ -18,6 +18,29 @@ Go Test City is an extension of GoCity, which implements the Code City metaphor 
 - The number of variables (NOV) affects the building’s base size
 - The number of methods (NOM) influences the building height
 
+Sure, here is a clean and professional version in English without emojis or symbols:
+
+---
+
+## Run the Backend
+
+To start the backend server:
+
+```bash
+cd backend
+go run main.go server
+```
+
+The server will be available at:
+
+```
+http://localhost:4000
+```
+
+Make sure that port 4000 is not being used by another process.
+
+![](.docs/execution.png)
+
 ## Author
 
 - **ShinjiMC** - [GitHub Profile](https://github.com/ShinjiMC)

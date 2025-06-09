@@ -5,8 +5,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/rodrigo-brito/gocity/pkg/lib"
-	"github.com/rodrigo-brito/gocity/pkg/server"
+	"github.com/shinjimc/gotestcity/pkg/lib"
+	"github.com/shinjimc/gotestcity/pkg/server"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )

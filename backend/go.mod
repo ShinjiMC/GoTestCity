@@ -1,4 +1,4 @@
-module github.com/rodrigo-brito/gocity
+module github.com/shinjimc/gotestcity
 
 go 1.17
 
