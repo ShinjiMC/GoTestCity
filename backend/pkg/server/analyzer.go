@@ -61,10 +61,13 @@ func (h *AnalyzerHandle) Handler(w http.ResponseWriter, r *http.Request) {
 	} else if h.Branch != nil {
 		branch = *h.Branch
 	}
-
-	key := fmt.Sprintf("%s:%s", projectAddress, branch)
+	commit := r.URL.Query().Get("c")
+	log.Infof("Commit recibido: %s", commit)
+	key := fmt.Sprintf("%s:%s:%s", projectAddress, branch, commit)
 	result, err := h.Cache.GetSet(key, func() ([]byte, error) {
-		codeAnalyzer := analyzer.NewAnalyzer(projectAddress, branch, h.TmpFolder, analyzer.WithIgnoreList("/vendor/"))
+		log.Infof("Fetching project: %s, branch: %s, commit: %s", projectAddress, branch, commit)
+		codeAnalyzer := analyzer.NewAnalyzer(projectAddress, branch, commit, h.TmpFolder, analyzer.WithIgnoreList("/vendor/"))
+		//codeAnalyzer := analyzer.NewAnalyzer(projectAddress, branch, h.TmpFolder, analyzer.WithIgnoreList("/vendor/"))
 
 		path := projectAddress
 		stat, err := os.Stat(projectAddress)

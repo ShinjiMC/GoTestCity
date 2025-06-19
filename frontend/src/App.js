@@ -23,17 +23,29 @@ const endpoint = Cookies.get("gocity_api") || process.env.REACT_APP_API_URL;
 // TODO: isolate in the constants file
 const colors = {
   PACKAGE: {
-    start: { r: 255, g: 100, b: 100 },
-    end: { r: 255, g: 100, b: 100 },
+    start: { r: 255, g: 207, b: 64 }, // Amarillo mostaza (más llamativo)
+    end: { r: 200, g: 160, b: 50 },
   },
   FILE: {
-    start: { r: 255, g: 255, b: 255 },
-    end: { r: 0, g: 0, b: 0 },
+    start: { r: 120, g: 190, b: 32 }, // Verde lima (papel = ecológico)
+    end: { r: 80, g: 150, b: 30 },
   },
   STRUCT: {
-    start: { r: 32, g: 156, b: 238 },
-    end: { r: 0, g: 0, b: 0 },
+    start: { r: 100, g: 143, b: 255 }, // Azul (estructuras metálicas/vidrio)
+    end: { r: 60, g: 100, b: 200 },
   },
+  ROOT: {
+    start: { r: 160, g: 160, b: 160 }, // Cemento base
+    end: { r: 100, g: 100, b: 100 },
+  },
+};
+
+const mirrorColors = {
+  PACKAGE: new BABYLON.Color3(0.6, 0.4, 0.1), // Marrón/ámbar oscuro
+  FILE: new BABYLON.Color3(0.2, 0.4, 0.2), // Verde oscuro
+  STRUCT: new BABYLON.Color3(0.3, 0.4, 0.7), // Azul noche
+  ROOT: new BABYLON.Color3(0.2, 0.2, 0.2), // Asfalto
+  DEFAULT: new BABYLON.Color3(0.3, 0.3, 0.3),
 };
 
 const examples = [
@@ -76,6 +88,8 @@ class App extends Component {
         "github.com/ShinjiMC/Golang_Exercises_Course",
       branch: this.props.match.params.branch || "main",
       modalActive: false,
+      commit: "", // también puedes inicializarlo si usas un value
+      commits: [], // <--- agrega esto
     };
 
     this.addBlock = this.addBlock.bind(this);
@@ -128,10 +142,12 @@ class App extends Component {
   reset() {
     this.scene.dispose();
     this.scene = new BABYLON.Scene(this.engine);
+    this.bars = [];
     this.initScene();
   }
 
   addBlock = (data) => {
+    const name = data.label || "unnamed";
     const bar = BABYLON.MeshBuilder.CreateBox(
       data.label,
       { width: data.width, depth: data.depth, height: data.height },
@@ -168,11 +184,14 @@ class App extends Component {
     );
 
     // Material
-    bar.material = new BABYLON.StandardMaterial(data.label + "mat", this.scene);
+    bar.material = new BABYLON.StandardMaterial(name + "mat", this.scene);
     bar.material.diffuseColor = data.color;
 
     bar.freezeWorldMatrix();
-
+    if (!this.bars) this.bars = [];
+    if (!data.isMirror) {
+      this.bars.push(bar);
+    }
     return bar;
   };
 
@@ -180,13 +199,23 @@ class App extends Component {
     if (!children) {
       return;
     }
+    if (!parent) {
+      this.bars = [];
+    }
 
     children.forEach((data) => {
       var color = getProportionalColor(
-        colors[data.type].start,
-        colors[data.type].end,
+        colors.ROOT.start,
+        colors.ROOT.end,
         Math.min(100, data.numberOfLines / 2000.0)
       );
+      if (data.name !== "") {
+        color = getProportionalColor(
+          colors[data.type].start,
+          colors[data.type].end,
+          Math.min(100, data.numberOfLines / 2000.0)
+        );
+      }
 
       var mesh = this.addBlock({
         x: data.position.x,
@@ -258,6 +287,13 @@ class App extends Component {
     );
 
     light.intensity = 0.8;
+    const underLight = new BABYLON.DirectionalLight(
+      "underLight",
+      new BABYLON.Vector3(0, 1, 0), // de abajo hacia arriba
+      this.scene
+    );
+    underLight.position = new BABYLON.Vector3(0, -500, 0); // debajo de la ciudad
+    underLight.intensity = 0.7;
   }
 
   onSceneMount(e) {
@@ -286,6 +322,12 @@ class App extends Component {
     }
     if (e.target.id === "branch") {
       this.setState({ branch: e.target.value });
+    }
+    if (e.target.id === "commit") {
+      const selectedCommit = e.target.value;
+      this.setState({ commit: selectedCommit }, () => {
+        this.process(this.state.repository, "", this.state.branch);
+      });
     }
   }
 
@@ -319,6 +361,20 @@ class App extends Component {
       loading: true,
     });
 
+    // Cargar commits desde GitHub
+    const [user, repo] = repositoryName.replace("github.com/", "").split("/");
+    axios
+      .get(`https://api.github.com/repos/${user}/${repo}/commits`, {
+        params: { sha: branch },
+      })
+      .then((res) => {
+        this.setState({ commits: res.data });
+      })
+      .catch((err) => {
+        console.warn("Could not fetch commits:", err);
+        this.setState({ commits: [] });
+      });
+
     let request = null;
     if (json) {
       request = axios.get(json);
@@ -327,6 +383,7 @@ class App extends Component {
         params: {
           q: repositoryName,
           b: branch,
+          c: this.state.commit,
         },
       });
     }
@@ -341,6 +398,63 @@ class App extends Component {
         }
 
         this.plot(response.data.children);
+        const mirrorParent = new BABYLON.TransformNode(
+          "mirrorParent",
+          this.scene
+        );
+        mirrorParent.position.y = -1;
+        if (this.bars) {
+          this.bars.forEach((bar) => {
+            const mirror = bar.clone(bar.name + "_mirror");
+            mirror.info = bar.info;
+
+            const absolute = bar.getAbsolutePosition();
+            mirror.position = new BABYLON.Vector3(
+              absolute.x,
+              -absolute.y,
+              absolute.z
+            );
+            let scaleY = -1;
+            const type2 = (bar.info?.type || "DEFAULT").toUpperCase();
+            if (type2 !== "ROOT") {
+              // Reducir la altura aleatoriamente entre 20% y 80%
+              const scaleFactor = 0.2 + Math.random() * 0.6;
+              scaleY *= scaleFactor;
+            }
+            mirror.scaling.y = scaleY;
+            mirror.parent = mirrorParent;
+
+            mirror.info = bar.info;
+
+            const type = (bar.info?.type || "DEFAULT").toUpperCase();
+            let mirrorColor = mirrorColors.ROOT;
+            if (bar.info?.name !== "")
+              mirrorColor = mirrorColors[type] || mirrorColors.DEFAULT;
+
+            const testMaterial = new BABYLON.StandardMaterial(
+              mirror.name + "_mat",
+              this.scene
+            );
+            testMaterial.diffuseColor = mirrorColor;
+            mirror.material = testMaterial;
+
+            mirror.actionManager = new BABYLON.ActionManager(this.scene);
+            mirror.actionManager.registerAction(
+              new BABYLON.ExecuteCodeAction(
+                BABYLON.ActionManager.OnPointerOverTrigger,
+                () => {
+                  this.showTooltip(mirror.info);
+                }
+              )
+            );
+            mirror.actionManager.registerAction(
+              new BABYLON.ExecuteCodeAction(
+                BABYLON.ActionManager.OnPointerOutTrigger,
+                this.hideTooltip
+              )
+            );
+          });
+        }
         this.updateCamera(response.data.width, response.data.depth);
       })
       .catch((e) => {
@@ -490,6 +604,23 @@ class App extends Component {
                 />
               </div>
               <div className="control">
+                {/* eslint-disable-next-line jsx-a11y/no-onchange */}
+                <select
+                  id="commit"
+                  className="select"
+                  value={this.state.commit}
+                  onChange={this.onInputChange.bind(this)} // permitido aquí
+                >
+                  <option value="">Select commit...</option>
+                  {this.state.commits.map((commit) => (
+                    <option key={commit.sha} value={commit.sha}>
+                      {commit.commit.message.substring(0, 60)} (
+                      {commit.sha.slice(0, 7)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="control">
                 <button
                   id="search"
                   onClick={this.onClick}
@@ -499,6 +630,7 @@ class App extends Component {
                 </button>
               </div>
             </div>
+
             <div className="level">
               <small className="level-left">
                 Examples:{" "}

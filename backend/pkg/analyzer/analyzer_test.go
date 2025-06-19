@@ -12,8 +12,9 @@ func TestNewAnalyzer(t *testing.T) {
 	t.Run("WithoutIgnoreList", func(t *testing.T) {
 		packageName := "github.com/shinjimc/gotestcity"
 		branchName := "master"
+		commit := ""
 		tmpFolder := t.TempDir()
-		a := NewAnalyzer(packageName, branchName, tmpFolder)
+		a := NewAnalyzer(packageName, branchName,commit,tmpFolder)
 		rawA, ok := a.(*analyzer)
 		assert.True(t, ok)
 
@@ -25,9 +26,10 @@ func TestNewAnalyzer(t *testing.T) {
 	t.Run("WithIgnoreList", func(t *testing.T) {
 		packageName := "github.com/shinjimc/gotestcity"
 		branchName := "master"
+		commit := ""
 		tmpFolder := t.TempDir()
 		ignoreList := []string{"/vendor/", "/third-party/", "/external/"}
-		a := NewAnalyzer(packageName, branchName, tmpFolder, WithIgnoreList(ignoreList...))
+		a := NewAnalyzer(packageName, branchName, commit, tmpFolder, WithIgnoreList(ignoreList...))
 		rawA, ok := a.(*analyzer)
 		assert.True(t, ok)
 
@@ -85,7 +87,7 @@ func TestAnalyze(t *testing.T) {
 
 	t.Run("SingleGoFile", func(t *testing.T) {
 		packagePath := filepath.Join(testDataDir(), "subpackage")
-		a := NewAnalyzer("github.com/foo/bar", "main", packagePath)
+		a := NewAnalyzer("github.com/foo/bar", "main", "", packagePath)
 		result, err := a.Analyze(packagePath)
 		assert.Nil(t, err)
 		assert.Equal(t, 2, len(result))
@@ -96,7 +98,7 @@ func TestAnalyze(t *testing.T) {
 
 	t.Run("MultipleGoFiles", func(t *testing.T) {
 		packagePath := filepath.Join(testDataDir())
-		a := NewAnalyzer("github.com/foo/bar", "main", packagePath)
+		a := NewAnalyzer("github.com/foo/bar", "main","", packagePath)
 		result, err := a.Analyze(packagePath)
 		assert.Nil(t, err)
 		assert.Equal(t, 5, len(result))

@@ -21,6 +21,7 @@ type Analyzer interface {
 type analyzer struct {
 	PackageName string
 	BranchName  string
+	CommitSHA   string
 	IgnoreNodes []string
 	fetcher     lib.Fetcher
 	tmpFolder   string
@@ -28,10 +29,12 @@ type analyzer struct {
 
 type Option func(a *analyzer)
 
-func NewAnalyzer(packageName, branchName, tmpFolder string, options ...Option) Analyzer {
+func NewAnalyzer(packageName, branchName, commitHash, tmpFolder string, options ...Option) Analyzer {
+	log.Infof("Creating analyzer for package: %s, branch: %s, commit: %s", packageName, branchName, commitHash)
 	analyzer := &analyzer{
 		PackageName: packageName,
 		BranchName:  branchName,
+		CommitSHA:  commitHash,
 		fetcher:     lib.NewFetcher(tmpFolder),
 		tmpFolder:   tmpFolder,
 	}
@@ -43,6 +46,21 @@ func NewAnalyzer(packageName, branchName, tmpFolder string, options ...Option) A
 	return analyzer
 }
 
+// func NewAnalyzer(packageName, branchName, tmpFolder string, options ...Option) Analyzer {
+// 	analyzer := &analyzer{
+// 		PackageName: packageName,
+// 		BranchName:  branchName,
+// 		fetcher:     lib.NewFetcher(tmpFolder),
+// 		tmpFolder:   tmpFolder,
+// 	}
+
+// 	for _, option := range options {
+// 		option(analyzer)
+// 	}
+
+// 	return analyzer
+// }
+
 func WithIgnoreList(files ...string) Option {
 	return func(a *analyzer) {
 		a.IgnoreNodes = files
@@ -50,7 +68,7 @@ func WithIgnoreList(files ...string) Option {
 }
 
 func (a *analyzer) FetchPackage() (string, error) {
-	return a.fetcher.Fetch(a.PackageName, a.BranchName)
+	return a.fetcher.Fetch(a.PackageName, a.BranchName, a.CommitSHA)
 }
 
 func (a *analyzer) IsInvalidPath(path string) bool {

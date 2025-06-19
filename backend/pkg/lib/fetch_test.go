@@ -16,13 +16,13 @@ func TestFetch(t *testing.T) {
 	assert.Implements(t, new(Fetcher), f)
 
 	t.Run("invalid package", func(t *testing.T) {
-		path, err := f.Fetch("invalid", "master")
+		path, err := f.Fetch("invalid", "master","")
 		assert.Error(t, err)
 		require.Empty(t, path)
 	})
 
 	t.Run("valid package", func(t *testing.T) {
-		path, err := f.Fetch("github.com/shinjimc/gotestcity", "master")
+		path, err := f.Fetch("github.com/shinjimc/gotestcity", "master","")
 		assert.NoError(t, err)
 		require.NotEmpty(t, path)
 	})
