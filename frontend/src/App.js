@@ -90,6 +90,7 @@ class App extends Component {
       modalActive: false,
       commit: "", // también puedes inicializarlo si usas un value
       commits: [], // <--- agrega esto
+      selectedCommitDate: null,
     };
 
     this.addBlock = this.addBlock.bind(this);
@@ -110,6 +111,8 @@ class App extends Component {
     this.closeModal = this.closeModal.bind(this);
     this.getBadgeValue = this.getBadgeValue.bind(this);
     this.saveAsPng = this.saveAsPng.bind(this);
+
+    this.bars = [];
   }
 
   componentDidMount() {
@@ -129,6 +132,7 @@ class App extends Component {
         infoVisible: true,
         infoData: info,
         infoPosition: { x: this.mouse_x, y: this.mouse_y },
+        focusedBarName: info.name,
       });
     }, 100);
   }
@@ -136,14 +140,85 @@ class App extends Component {
   hideTooltip() {
     this.setState({
       infoVisible: false,
+      focusedBarName: null,
     });
   }
+
+  dimUnfocusedBars = () => {
+    const { focusedBarName } = this.state;
+
+    this.bars.forEach((bar) => {
+      if (!bar.material) return;
+
+      const isFocused = bar.info?.name === focusedBarName;
+      bar.material.alpha = isFocused || !focusedBarName ? 1.0 : 0.3;
+    });
+  };
 
   reset() {
     this.scene.dispose();
     this.scene = new BABYLON.Scene(this.engine);
     this.bars = [];
     this.initScene();
+  }
+
+  cloneChildrenRecursively(source, target, mirrorParent) {
+    source.getChildren().forEach((child) => {
+      const childMirror = child.clone(child.name + "_mirror", null, false);
+      // Reflejar posición local (NO absoluta)
+      const centerY = source.getBoundingInfo().boundingBox.center.y;
+      const offsetY = child.position.y - centerY;
+
+      childMirror.position = new BABYLON.Vector3(
+        child.position.x,
+        centerY - offsetY,
+        child.position.z
+      );
+
+      // Copiar escala completa y reflejar Y con factor
+      childMirror.scaling = child.scaling.clone();
+      childMirror.scaling.y *= -1;
+
+      // Asignar parent espejo
+      childMirror.parent = target;
+
+      const type = (child.info?.type || "DEFAULT").toUpperCase();
+      const mirrorColor =
+        child.info?.name !== ""
+          ? mirrorColors[type] || mirrorColors.DEFAULT
+          : mirrorColors.ROOT;
+
+      const mat = new BABYLON.StandardMaterial(
+        childMirror.name + "_mat",
+        this.scene
+      );
+      mat.diffuseColor = mirrorColor;
+      childMirror.material = mat;
+
+      childMirror.info = {
+        ...child.info,
+        isMirror: true,
+      };
+
+      childMirror.actionManager = new BABYLON.ActionManager(this.scene);
+      childMirror.actionManager.registerAction(
+        new BABYLON.ExecuteCodeAction(
+          BABYLON.ActionManager.OnPointerOverTrigger,
+          () => {
+            this.showTooltip(childMirror.info);
+          }
+        )
+      );
+      childMirror.actionManager.registerAction(
+        new BABYLON.ExecuteCodeAction(
+          BABYLON.ActionManager.OnPointerOutTrigger,
+          this.hideTooltip
+        )
+      );
+
+      // Clonar recursivamente
+      this.cloneChildrenRecursively(child, childMirror, mirrorParent);
+    });
   }
 
   addBlock = (data) => {
@@ -163,8 +238,10 @@ class App extends Component {
     }
     bar.position.x = data.x || 0;
     bar.position.z = data.y || 0;
-
-    bar.info = data.info;
+    bar.info = {
+      ...data.info,
+      isMirror: data.isMirror || false, // marcar si es espejo o no
+    };
 
     bar.actionManager = new BABYLON.ActionManager(this.scene);
     bar.actionManager.registerAction(
@@ -174,6 +251,13 @@ class App extends Component {
           this.showTooltip(bar.info);
         }
       )
+    );
+
+    // Manejar CLICK aquí
+    bar.actionManager.registerAction(
+      new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPickTrigger, () => {
+        this.handleBarClick(bar.info);
+      })
     );
 
     bar.actionManager.registerAction(
@@ -216,6 +300,29 @@ class App extends Component {
           Math.min(100, data.numberOfLines / 2000.0)
         );
       }
+      const commitDate = new Date(this.state.selectedCommitDate);
+      const thresholdDate = new Date("2023-09-30T00:00:00Z");
+
+      let coverage = "100%";
+      if (commitDate < thresholdDate) {
+        const maxDays = 365 * 5; // límite de 5 años hacia atrás
+        const daysDifference = Math.min(
+          Math.floor((thresholdDate - commitDate) / (1000 * 60 * 60 * 24)),
+          maxDays
+        );
+
+        const decayFactor = 1 - daysDifference / maxDays; // más antiguo = más chico
+        const minCov = 30;
+        const maxCov = 80;
+
+        const adjustedMax = minCov + (maxCov - minCov) * decayFactor;
+
+        const randomCoverage = Math.floor(
+          minCov + Math.random() * (adjustedMax - minCov)
+        );
+
+        coverage = `${randomCoverage}%`;
+      }
 
       var mesh = this.addBlock({
         x: data.position.x,
@@ -232,6 +339,9 @@ class App extends Component {
           NOM: data.numberOfMethods,
           NOL: data.numberOfLines,
           NOA: data.numberOfAttributes,
+          test: Math.floor(Math.random() * 10) + 1,
+          coverage: coverage,
+          commitDate: this.state.selectedCommitDate,
         },
       });
 
@@ -295,6 +405,31 @@ class App extends Component {
     underLight.position = new BABYLON.Vector3(0, -500, 0); // debajo de la ciudad
     underLight.intensity = 0.7;
   }
+  handleBarClick = (info) => {
+    const selectedName = info?.name;
+
+    if (!selectedName || info?.type === "FILE" || info?.type === "PACKAGE") {
+      this.resetBarTransparency();
+      return;
+    }
+
+    this.setState({ focusedBarName: selectedName }, () => {
+      this.scene.meshes.forEach((mesh) => {
+        if (!mesh.material || !mesh.info) return;
+
+        const isSameName = mesh.info?.name === selectedName;
+        mesh.material.alpha = isSameName ? 1.0 : 0.3;
+      });
+    });
+  };
+  resetBarTransparency = () => {
+    this.scene.meshes.forEach((mesh) => {
+      if (mesh.material) {
+        mesh.material.alpha = 1.0;
+      }
+    });
+    this.setState({ focusedBarName: null });
+  };
 
   onSceneMount(e) {
     this.scene = e.scene;
@@ -302,9 +437,20 @@ class App extends Component {
     this.engine = e.engine;
 
     this.initScene();
-
+    this.scene.onPointerObservable.add((pointerInfo) => {
+      if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOWN) {
+        const pickResult = this.scene.pick(
+          this.scene.pointerX,
+          this.scene.pointerY
+        );
+        if (!pickResult.hit || !pickResult.pickedMesh?.info) {
+          this.resetBarTransparency();
+        }
+      }
+    });
     this.engine.runRenderLoop(() => {
       if (this.scene) {
+        // this.dimUnfocusedBars();
         this.scene.render();
       }
     });
@@ -369,6 +515,13 @@ class App extends Component {
       })
       .then((res) => {
         this.setState({ commits: res.data });
+        const selectedCommit = this.state.commit;
+        const commitInfo = res.data.find((c) =>
+          c.sha.startsWith(selectedCommit)
+        );
+        const commitDate = commitInfo ? commitInfo.commit.author.date : null;
+
+        this.setState({ selectedCommitDate: commitDate });
       })
       .catch((err) => {
         console.warn("Could not fetch commits:", err);
@@ -398,62 +551,102 @@ class App extends Component {
         }
 
         this.plot(response.data.children);
+
         const mirrorParent = new BABYLON.TransformNode(
           "mirrorParent",
           this.scene
         );
         mirrorParent.position.y = -1;
         if (this.bars) {
-          this.bars.forEach((bar) => {
-            const mirror = bar.clone(bar.name + "_mirror");
-            mirror.info = bar.info;
+          this.bars
+            .filter((bar) => !bar.info?.isMirror && !bar.parent) // solo nodos raíz
+            .forEach((bar) => {
+              const mirror = BABYLON.MeshBuilder.CreateBox(
+                bar.name + "_mirror",
+                {
+                  width:
+                    bar.scaling.x *
+                    bar.getBoundingInfo().boundingBox.extendSize.x *
+                    2,
+                  depth:
+                    bar.scaling.z *
+                    bar.getBoundingInfo().boundingBox.extendSize.z *
+                    2,
+                  height:
+                    bar.scaling.y *
+                    bar.getBoundingInfo().boundingBox.extendSize.y *
+                    2,
+                },
+                this.scene
+              );
+              const absolute = bar.getAbsolutePosition();
+              mirror.position = new BABYLON.Vector3(
+                absolute.x,
+                -absolute.y,
+                absolute.z
+              );
+              let scaleY = -1;
+              const type2 = (bar.info?.type || "DEFAULT").toUpperCase();
+              if (type2 !== "ROOT") {
+                const rawCoverage = bar.info?.coverage || "100%";
+                const numericCoverage = parseFloat(
+                  rawCoverage.replace("%", "")
+                );
+                const normalizedScale = Math.max(
+                  0.0,
+                  Math.min(1.0, numericCoverage / 100)
+                );
+                scaleY *= normalizedScale;
+              } else {
+                scaleY *= 1.0;
+              }
+              mirror.scaling.y = scaleY;
+              mirror.parent = mirrorParent;
 
-            const absolute = bar.getAbsolutePosition();
-            mirror.position = new BABYLON.Vector3(
-              absolute.x,
-              -absolute.y,
-              absolute.z
-            );
-            let scaleY = -1;
-            const type2 = (bar.info?.type || "DEFAULT").toUpperCase();
-            if (type2 !== "ROOT") {
-              // Reducir la altura aleatoriamente entre 20% y 80%
-              const scaleFactor = 0.2 + Math.random() * 0.6;
-              scaleY *= scaleFactor;
-            }
-            mirror.scaling.y = scaleY;
-            mirror.parent = mirrorParent;
+              mirror.info = bar.info;
 
-            mirror.info = bar.info;
+              const type = (bar.info?.type || "DEFAULT").toUpperCase();
+              let mirrorColor = mirrorColors.ROOT;
+              if (bar.info?.name !== "")
+                mirrorColor = mirrorColors[type] || mirrorColors.DEFAULT;
 
-            const type = (bar.info?.type || "DEFAULT").toUpperCase();
-            let mirrorColor = mirrorColors.ROOT;
-            if (bar.info?.name !== "")
-              mirrorColor = mirrorColors[type] || mirrorColors.DEFAULT;
+              const mat = new BABYLON.StandardMaterial(
+                mirror.name + "_mat",
+                this.scene
+              );
+              mat.diffuseColor = mirrorColor;
+              mirror.material = mat;
 
-            const testMaterial = new BABYLON.StandardMaterial(
-              mirror.name + "_mat",
-              this.scene
-            );
-            testMaterial.diffuseColor = mirrorColor;
-            mirror.material = testMaterial;
+              mirror.info = {
+                ...bar.info,
+                isMirror: true,
+              };
 
-            mirror.actionManager = new BABYLON.ActionManager(this.scene);
-            mirror.actionManager.registerAction(
-              new BABYLON.ExecuteCodeAction(
-                BABYLON.ActionManager.OnPointerOverTrigger,
-                () => {
-                  this.showTooltip(mirror.info);
-                }
-              )
-            );
-            mirror.actionManager.registerAction(
-              new BABYLON.ExecuteCodeAction(
-                BABYLON.ActionManager.OnPointerOutTrigger,
-                this.hideTooltip
-              )
-            );
-          });
+              mirror.actionManager = new BABYLON.ActionManager(this.scene);
+              mirror.actionManager.registerAction(
+                new BABYLON.ExecuteCodeAction(
+                  BABYLON.ActionManager.OnPointerOverTrigger,
+                  () => {
+                    this.showTooltip(mirror.info);
+                  }
+                )
+              );
+              mirror.actionManager.registerAction(
+                new BABYLON.ExecuteCodeAction(
+                  BABYLON.ActionManager.OnPointerOverTrigger,
+                  () => {
+                    this.handleBarClick(mirror.info);
+                  }
+                )
+              );
+              mirror.actionManager.registerAction(
+                new BABYLON.ExecuteCodeAction(
+                  BABYLON.ActionManager.OnPointerOutTrigger,
+                  this.hideTooltip
+                )
+              );
+              this.cloneChildrenRecursively(bar, mirror, mirrorParent);
+            });
         }
         this.updateCamera(response.data.width, response.data.depth);
       })
@@ -478,7 +671,6 @@ class App extends Component {
     searchEvent(this.state.repository);
     this.process(this.state.repository, "", this.state.branch);
   }
-
   onFeedBackFormClose() {
     this.setState({ feedbackFormActive: false });
   }

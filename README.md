@@ -41,6 +41,9 @@ Make sure that port 4000 is not being used by another process.
 
 ![](.docs/execution.png)
 
+export NODE_OPTIONS=--openssl-legacy-provider
+yarn start
+
 ## Author
 
 - **ShinjiMC** - [GitHub Profile](https://github.com/ShinjiMC)
