@@ -61,13 +61,33 @@ func (v *Visitor) Visit(node ast.Node) ast.Visitor {
 		var structName = ""
 		if definition.Recv != nil && len(definition.Recv.List) > 0 {
 			typeObj := definition.Recv.List[0].Type
+			// if ident, ok := typeObj.(*ast.Ident); ok {
+			// 	structName = ident.Name
+			// } else {
+			// 	if ident, ok := typeObj.(*ast.StarExpr).X.(*ast.Ident); ok {
+			// 		structName = ident.Name
+			// 	} else if ident, ok := typeObj.(*ast.StarExpr).X.(*ast.SelectorExpr); ok {
+			// 		structName = ident.Sel.Name
+			// 	}
+			// }
 			if ident, ok := typeObj.(*ast.Ident); ok {
 				structName = ident.Name
-			} else {
-				if ident, ok := typeObj.(*ast.StarExpr).X.(*ast.Ident); ok {
+			} else if star, ok := typeObj.(*ast.StarExpr); ok {
+				// ⭐ Comprobamos que realmente es *ast.StarExpr
+				if ident, ok := star.X.(*ast.Ident); ok {
 					structName = ident.Name
-				} else if ident, ok := typeObj.(*ast.StarExpr).X.(*ast.SelectorExpr); ok {
-					structName = ident.Sel.Name
+				} else if sel, ok := star.X.(*ast.SelectorExpr); ok {
+					structName = sel.Sel.Name
+				}
+			} else if sel, ok := typeObj.(*ast.SelectorExpr); ok {
+				// Ej. paquete.Tipo sin puntero
+				structName = sel.Sel.Name
+			} else if idx, ok := typeObj.(*ast.IndexExpr); ok {
+				// ✅ NUEVO: manejar generics tipo MyType[T]
+				if ident, ok := idx.X.(*ast.Ident); ok {
+					structName = ident.Name
+				} else if sel, ok := idx.X.(*ast.SelectorExpr); ok {
+					structName = sel.Sel.Name
 				}
 			}
 		}

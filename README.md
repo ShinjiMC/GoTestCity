@@ -51,3 +51,24 @@ yarn start
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+| Métrica         | Herramienta Go (ejemplos)                                                     |
+| --------------- | ----------------------------------------------------------------------------- |
+| **Complejidad** | [`gocyclo`](https://github.com/fzipp/gocyclo) (mide complejidad ciclomática). |
+| **Cobertura**   | `go-acc` + `gocov` (mide la cobertura del código y lo convierte a JSON).      |
+| **Calidad**     | `golangci-lint` (muchos linters: estilo, errores potenciales).                |
+| **Seguridad**   | [`gosec`](https://github.com/securego/gosec) (detecta patrones inseguros).    |
+| **Duplicidad**  | [`dupl`](https://github.com/mibk/dupl) (detecta código duplicado).            |
+
+go install github.com/ory/go-acc@latest
+go install github.com/axw/gocov/gocov@latest
+go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+ curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.4.0
+go install github.com/securego/gosec/v2/cmd/gosec@latest
+go install github.com/securego/gosec/v2/cmd/gosec@v2.22.7
+
+
+go run main.go open /home/shinji/Escritorio/Proyectos/conc --port 4000 --branch main
+

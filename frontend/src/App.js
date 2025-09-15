@@ -22,30 +22,10 @@ const endpoint = Cookies.get("gocity_api") || process.env.REACT_APP_API_URL;
 
 // TODO: isolate in the constants file
 const colors = {
-  PACKAGE: {
-    start: { r: 255, g: 207, b: 64 }, // Amarillo mostaza (más llamativo)
-    end: { r: 200, g: 160, b: 50 },
-  },
-  FILE: {
-    start: { r: 120, g: 190, b: 32 }, // Verde lima (papel = ecológico)
-    end: { r: 80, g: 150, b: 30 },
-  },
-  STRUCT: {
-    start: { r: 100, g: 143, b: 255 }, // Azul (estructuras metálicas/vidrio)
-    end: { r: 60, g: 100, b: 200 },
-  },
-  ROOT: {
-    start: { r: 160, g: 160, b: 160 }, // Cemento base
-    end: { r: 100, g: 100, b: 100 },
-  },
-};
-
-const mirrorColors = {
-  PACKAGE: new BABYLON.Color3(0.6, 0.4, 0.1), // Marrón/ámbar oscuro
-  FILE: new BABYLON.Color3(0.2, 0.4, 0.2), // Verde oscuro
-  STRUCT: new BABYLON.Color3(0.3, 0.4, 0.7), // Azul noche
-  ROOT: new BABYLON.Color3(0.2, 0.2, 0.2), // Asfalto
-  DEFAULT: new BABYLON.Color3(0.3, 0.3, 0.3),
+  PACKAGE: { start: { r: 255, g: 207, b: 64 }, end: { r: 200, g: 160, b: 50 } },
+  FILE: { start: { r: 120, g: 190, b: 32 }, end: { r: 80, g: 150, b: 30 } },
+  STRUCT: { start: { r: 100, g: 143, b: 255 }, end: { r: 60, g: 100, b: 200 } },
+  ROOT: { start: { r: 160, g: 160, b: 160 }, end: { r: 100, g: 100, b: 100 } },
 };
 
 const examples = [
@@ -86,10 +66,10 @@ class App extends Component {
       repository:
         this.props.match.params.repository ||
         "github.com/ShinjiMC/Golang_Exercises_Course",
-      branch: this.props.match.params.branch || "main",
+      branch: this.props.match.params.branch || "master",
       modalActive: false,
-      commit: "", // también puedes inicializarlo si usas un value
-      commits: [], // <--- agrega esto
+      commit: "HEAD",
+      commits: [],
       selectedCommitDate: null,
     };
 
@@ -143,86 +123,13 @@ class App extends Component {
       focusedBarName: null,
     });
   }
-
-  dimUnfocusedBars = () => {
-    const { focusedBarName } = this.state;
-
-    this.bars.forEach((bar) => {
-      if (!bar.material) return;
-
-      const isFocused = bar.info?.name === focusedBarName;
-      bar.material.alpha = isFocused || !focusedBarName ? 1.0 : 0.3;
-    });
-  };
-
   reset() {
     this.scene.dispose();
     this.scene = new BABYLON.Scene(this.engine);
-    this.bars = [];
     this.initScene();
   }
 
-  cloneChildrenRecursively(source, target, mirrorParent) {
-    source.getChildren().forEach((child) => {
-      const childMirror = child.clone(child.name + "_mirror", null, false);
-      // Reflejar posición local (NO absoluta)
-      const centerY = source.getBoundingInfo().boundingBox.center.y;
-      const offsetY = child.position.y - centerY;
-
-      childMirror.position = new BABYLON.Vector3(
-        child.position.x,
-        centerY - offsetY,
-        child.position.z
-      );
-
-      // Copiar escala completa y reflejar Y con factor
-      childMirror.scaling = child.scaling.clone();
-      childMirror.scaling.y *= -1;
-
-      // Asignar parent espejo
-      childMirror.parent = target;
-
-      const type = (child.info?.type || "DEFAULT").toUpperCase();
-      const mirrorColor =
-        child.info?.name !== ""
-          ? mirrorColors[type] || mirrorColors.DEFAULT
-          : mirrorColors.ROOT;
-
-      const mat = new BABYLON.StandardMaterial(
-        childMirror.name + "_mat",
-        this.scene
-      );
-      mat.diffuseColor = mirrorColor;
-      childMirror.material = mat;
-
-      childMirror.info = {
-        ...child.info,
-        isMirror: true,
-      };
-
-      childMirror.actionManager = new BABYLON.ActionManager(this.scene);
-      childMirror.actionManager.registerAction(
-        new BABYLON.ExecuteCodeAction(
-          BABYLON.ActionManager.OnPointerOverTrigger,
-          () => {
-            this.showTooltip(childMirror.info);
-          }
-        )
-      );
-      childMirror.actionManager.registerAction(
-        new BABYLON.ExecuteCodeAction(
-          BABYLON.ActionManager.OnPointerOutTrigger,
-          this.hideTooltip
-        )
-      );
-
-      // Clonar recursivamente
-      this.cloneChildrenRecursively(child, childMirror, mirrorParent);
-    });
-  }
-
   addBlock = (data) => {
-    const name = data.label || "unnamed";
     const bar = BABYLON.MeshBuilder.CreateBox(
       data.label,
       { width: data.width, depth: data.depth, height: data.height },
@@ -238,10 +145,8 @@ class App extends Component {
     }
     bar.position.x = data.x || 0;
     bar.position.z = data.y || 0;
-    bar.info = {
-      ...data.info,
-      isMirror: data.isMirror || false, // marcar si es espejo o no
-    };
+
+    bar.info = data.info;
 
     bar.actionManager = new BABYLON.ActionManager(this.scene);
     bar.actionManager.registerAction(
@@ -253,13 +158,6 @@ class App extends Component {
       )
     );
 
-    // Manejar CLICK aquí
-    bar.actionManager.registerAction(
-      new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPickTrigger, () => {
-        this.handleBarClick(bar.info);
-      })
-    );
-
     bar.actionManager.registerAction(
       new BABYLON.ExecuteCodeAction(
         BABYLON.ActionManager.OnPointerOutTrigger,
@@ -268,14 +166,11 @@ class App extends Component {
     );
 
     // Material
-    bar.material = new BABYLON.StandardMaterial(name + "mat", this.scene);
+    bar.material = new BABYLON.StandardMaterial(data.label + "mat", this.scene);
     bar.material.diffuseColor = data.color;
 
     bar.freezeWorldMatrix();
-    if (!this.bars) this.bars = [];
-    if (!data.isMirror) {
-      this.bars.push(bar);
-    }
+
     return bar;
   };
 
@@ -283,53 +178,38 @@ class App extends Component {
     if (!children) {
       return;
     }
-    if (!parent) {
-      this.bars = [];
-    }
 
     children.forEach((data) => {
       var color = getProportionalColor(
-        colors.ROOT.start,
-        colors.ROOT.end,
+        colors[data.type].start,
+        colors[data.type].end,
         Math.min(100, data.numberOfLines / 2000.0)
       );
-      if (data.name !== "") {
-        color = getProportionalColor(
-          colors[data.type].start,
-          colors[data.type].end,
-          Math.min(100, data.numberOfLines / 2000.0)
-        );
+
+      // Determinar altura mínima
+      var minHeight = 10; // altura mínima para que siempre se vea
+      var height =
+        data.type === "ROOT"
+          ? 0 // root plano
+          : Math.max(data.numberOfMethods / 10, minHeight / 2); // packages y demás
+      if (data.type === "PACKAGE") {
+        var h_package = data.height ?? 10;
+        height = Math.max(h_package, minHeight);
       }
-      const commitDate = new Date(this.state.selectedCommitDate);
-      const thresholdDate = new Date("2023-09-30T00:00:00Z");
-
-      let coverage = "100%";
-      if (commitDate < thresholdDate) {
-        const maxDays = 365 * 5; // límite de 5 años hacia atrás
-        const daysDifference = Math.min(
-          Math.floor((thresholdDate - commitDate) / (1000 * 60 * 60 * 24)),
-          maxDays
-        );
-
-        const decayFactor = 1 - daysDifference / maxDays; // más antiguo = más chico
-        const minCov = 30;
-        const maxCov = 80;
-
-        const adjustedMax = minCov + (maxCov - minCov) * decayFactor;
-
-        const randomCoverage = Math.floor(
-          minCov + Math.random() * (adjustedMax - minCov)
-        );
-
-        coverage = `${randomCoverage}%`;
+      if (data.type === "STRUCT") {
+        // Asegurarse de tener al menos minHeight
+        height = Math.max(data.height / 2, 1);
       }
-
+      // if (data.type === "ROOT") {
+      //   data.width = Math.max(data.width, 200);
+      //   data.depth = Math.max(data.depth, 200);
+      // }
       var mesh = this.addBlock({
         x: data.position.x,
         y: data.position.y,
         width: data.width,
         depth: data.depth,
-        height: data.numberOfMethods,
+        height: height,
         color: new BABYLON.Color3(color.r / 255, color.g / 255, color.b / 255),
         parent: parent,
         info: {
@@ -339,9 +219,6 @@ class App extends Component {
           NOM: data.numberOfMethods,
           NOL: data.numberOfLines,
           NOA: data.numberOfAttributes,
-          test: Math.floor(Math.random() * 10) + 1,
-          coverage: coverage,
-          commitDate: this.state.selectedCommitDate,
         },
       });
 
@@ -355,81 +232,60 @@ class App extends Component {
     });
   }
 
-  updateCamera(width, height) {
-    if (width > 1000) {
-      this.camera.useAutoRotationBehavior = false;
-    } else {
-      this.camera.useAutoRotationBehavior = true;
-    }
-    width = Math.min(width, 1000);
-    height = Math.min(height, 1000);
-    this.camera.setPosition(
-      new BABYLON.Vector3(width / 2, width, (width + height) / 2)
-    );
+  updateCamera(width, depth) {
+    if (!this.camera) return;
+
+    const centerX = 0;
+    const centerZ = 0;
+
+    // Mantener la altura de la cámara proporcional al tamaño de la ciudad
+    const maxDimension = Math.max(width, depth);
+    const radius = maxDimension * 1.5;
+
+    this.camera.setTarget(new BABYLON.Vector3(centerX, 0, centerZ));
+
+    this.camera.alpha = -Math.PI / 4;
+    this.camera.beta = Math.PI / 4;
+
+    this.camera.radius = radius;
+
+    this.camera.minZ = 1; // cercano
+    this.camera.maxZ = radius * 10; // o un valor mayor que tu radio máximo
+
+    // Optional: fijar límites dinámicos según tamaño
+    this.camera.lowerRadiusLimit = maxDimension * 0.5; // zoom mínimo
+    this.camera.upperRadiusLimit = maxDimension * 5; // zoom máximo
   }
 
   initScene() {
     this.scene.clearColor = new BABYLON.Color3(0.7, 0.7, 0.7);
-    // This creates and positions a free camera (non-mesh)
+
+    // Crear ArcRotateCamera con ángulos iniciales
     this.camera = new BABYLON.ArcRotateCamera(
       "camera",
-      0,
-      0,
-      10,
-      BABYLON.Vector3.Zero(),
+      -Math.PI / 4, // alpha: rotación horizontal
+      Math.PI / 4, // beta: altura inicial
+      1000, // radio inicial
+      BABYLON.Vector3.Zero(), // target
       this.scene
     );
 
-    // This targets the camera to scene origin
-    this.camera.setTarget(BABYLON.Vector3.Zero());
-
-    // This attaches the camera to the canvas
+    // Permitir controlar la cámara con mouse/touch
     this.camera.attachControl(this.canvas, true);
 
-    this.camera.setPosition(new BABYLON.Vector3(500, 400, -100));
-    this.camera.useAutoRotationBehavior = true;
+    // Ajustes de zoom y límites
+    this.camera.lowerRadiusLimit = 50; // zoom cercano
+    this.camera.upperRadiusLimit = 5000; // zoom lejano
+    this.camera.wheelDeltaPercentage = 0.01; // suaviza el zoom
 
-    // This creates a light, aiming 0,1,0 - to the sky (non-mesh)
-    var light = new BABYLON.HemisphericLight(
+    // Luz general
+    const light = new BABYLON.HemisphericLight(
       "global_light",
       new BABYLON.Vector3(0, 1, 0),
       this.scene
     );
-
     light.intensity = 0.8;
-    const underLight = new BABYLON.DirectionalLight(
-      "underLight",
-      new BABYLON.Vector3(0, 1, 0), // de abajo hacia arriba
-      this.scene
-    );
-    underLight.position = new BABYLON.Vector3(0, -500, 0); // debajo de la ciudad
-    underLight.intensity = 0.7;
   }
-  handleBarClick = (info) => {
-    const selectedName = info?.name;
-
-    if (!selectedName || info?.type === "FILE" || info?.type === "PACKAGE") {
-      this.resetBarTransparency();
-      return;
-    }
-
-    this.setState({ focusedBarName: selectedName }, () => {
-      this.scene.meshes.forEach((mesh) => {
-        if (!mesh.material || !mesh.info) return;
-
-        const isSameName = mesh.info?.name === selectedName;
-        mesh.material.alpha = isSameName ? 1.0 : 0.3;
-      });
-    });
-  };
-  resetBarTransparency = () => {
-    this.scene.meshes.forEach((mesh) => {
-      if (mesh.material) {
-        mesh.material.alpha = 1.0;
-      }
-    });
-    this.setState({ focusedBarName: null });
-  };
 
   onSceneMount(e) {
     this.scene = e.scene;
@@ -437,20 +293,9 @@ class App extends Component {
     this.engine = e.engine;
 
     this.initScene();
-    this.scene.onPointerObservable.add((pointerInfo) => {
-      if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERDOWN) {
-        const pickResult = this.scene.pick(
-          this.scene.pointerX,
-          this.scene.pointerY
-        );
-        if (!pickResult.hit || !pickResult.pickedMesh?.info) {
-          this.resetBarTransparency();
-        }
-      }
-    });
+
     this.engine.runRenderLoop(() => {
       if (this.scene) {
-        // this.dimUnfocusedBars();
         this.scene.render();
       }
     });
@@ -463,12 +308,9 @@ class App extends Component {
   };
 
   onInputChange(e) {
-    if (e.target.id === "repository") {
+    if (e.target.id === "repository")
       this.setState({ repository: e.target.value });
-    }
-    if (e.target.id === "branch") {
-      this.setState({ branch: e.target.value });
-    }
+    if (e.target.id === "branch") this.setState({ branch: e.target.value });
     if (e.target.id === "commit") {
       const selectedCommit = e.target.value;
       this.setState({ commit: selectedCommit }, () => {
@@ -478,14 +320,10 @@ class App extends Component {
   }
 
   process(repository, json, branch) {
-    if (!BABYLON.Engine.isSupported()) {
-      return;
-    }
-
+    if (!BABYLON.Engine.isSupported()) return;
     let repositoryName;
-    if (repository === "local") {
-      repositoryName = "local";
-    } else {
+    if (repository === "local") repositoryName = "local";
+    else {
       const match = URLRegexp.exec(repository);
       if (!match) {
         swal("Invalid URL", "Please inform a valid Github URL.", "error");
@@ -498,157 +336,70 @@ class App extends Component {
       ) {
         this.props.history.push(`/${match[1]}/#/${branch}`);
       }
-
       repositoryName = match[1];
     }
 
-    this.setState({
-      repository: repositoryName,
-      loading: true,
-    });
+    this.setState({ repository: repositoryName, loading: true });
 
-    // Cargar commits desde GitHub
-    const [user, repo] = repositoryName.replace("github.com/", "").split("/");
+    // const [user, repo] = repositoryName.replace("github.com/", "").split("/");
+    // axios
+    //   .get(`https://api.github.com/repos/${user}/${repo}/commits`, {
+    //     params: { sha: branch, per_page: 1000000 },
+    //   })
+    //   .then((res) => {
+    //     this.setState({ commits: res.data });
+    //     const selectedCommit = this.state.commit;
+    //     const commitInfo = res.data.find((c) =>
+    //       c.sha.startsWith(selectedCommit)
+    //     );
+    //     const commitDate = commitInfo ? commitInfo.commit.author.date : null;
+    //     this.setState({ selectedCommitDate: commitDate });
+    //   })
+    //   .catch((err) => {
+    //     console.warn("Could not fetch commits:", err);
+    //     this.setState({ commits: [] });
+    //   });
+    // 2. GET al endpoint base /api para obtener root JSON
     axios
-      .get(`https://api.github.com/repos/${user}/${repo}/commits`, {
-        params: { sha: branch },
+      .get(endpoint, {
+        params: { q: repositoryName, b: branch, c: this.state.commit },
       })
-      .then((res) => {
-        this.setState({ commits: res.data });
-        const selectedCommit = this.state.commit;
-        const commitInfo = res.data.find((c) =>
-          c.sha.startsWith(selectedCommit)
-        );
-        const commitDate = commitInfo ? commitInfo.commit.author.date : null;
+      .then((response) => {
+        const rootJSON = response.data;
 
-        this.setState({ selectedCommitDate: commitDate });
+        // 3. Generar la URL de hierarchical usando la URL raíz del proyecto
+        const rootURL =
+          rootJSON.url ||
+          // `https:///home/shinji/Escritorio/Proyectos/kubernetes/tree/master/home/shinji/Escritorio/Proyectos/kubernetes/pkg/apis/core`;
+          `https:///home/shinji/Escritorio/Proyectos/kubernetes/blob/master/home/shinji/Escritorio/Proyectos/kubernetes/pkg/apis/core/types.go`;
+
+        const hierarchicalURL = `${endpoint}/hierarchical`;
+        return axios.get(hierarchicalURL, {
+          params: {
+            q: repositoryName,
+            b: branch,
+            c: this.state.commit,
+            key: rootURL,
+          },
+        });
       })
-      .catch((err) => {
-        console.warn("Could not fetch commits:", err);
-        this.setState({ commits: [] });
-      });
-
-    let request = null;
-    if (json) {
-      request = axios.get(json);
-    } else {
-      request = axios.get(endpoint, {
-        params: {
-          q: repositoryName,
-          b: branch,
-          c: this.state.commit,
-        },
-      });
-    }
-
-    request
       .then((response) => {
         this.setState({ loading: false });
         this.reset();
 
-        if (response.data.children && response.data.children.length === 0) {
+        const hierarchicalData = response.data;
+
+        if (
+          !hierarchicalData.children ||
+          hierarchicalData.children.length === 0
+        ) {
           swal("Invalid project", "Only Go projects are allowed.", "error");
+          return;
         }
 
-        this.plot(response.data.children);
-
-        const mirrorParent = new BABYLON.TransformNode(
-          "mirrorParent",
-          this.scene
-        );
-        mirrorParent.position.y = -1;
-        if (this.bars) {
-          this.bars
-            .filter((bar) => !bar.info?.isMirror && !bar.parent) // solo nodos raíz
-            .forEach((bar) => {
-              const mirror = BABYLON.MeshBuilder.CreateBox(
-                bar.name + "_mirror",
-                {
-                  width:
-                    bar.scaling.x *
-                    bar.getBoundingInfo().boundingBox.extendSize.x *
-                    2,
-                  depth:
-                    bar.scaling.z *
-                    bar.getBoundingInfo().boundingBox.extendSize.z *
-                    2,
-                  height:
-                    bar.scaling.y *
-                    bar.getBoundingInfo().boundingBox.extendSize.y *
-                    2,
-                },
-                this.scene
-              );
-              const absolute = bar.getAbsolutePosition();
-              mirror.position = new BABYLON.Vector3(
-                absolute.x,
-                -absolute.y,
-                absolute.z
-              );
-              let scaleY = -1;
-              const type2 = (bar.info?.type || "DEFAULT").toUpperCase();
-              if (type2 !== "ROOT") {
-                const rawCoverage = bar.info?.coverage || "100%";
-                const numericCoverage = parseFloat(
-                  rawCoverage.replace("%", "")
-                );
-                const normalizedScale = Math.max(
-                  0.0,
-                  Math.min(1.0, numericCoverage / 100)
-                );
-                scaleY *= normalizedScale;
-              } else {
-                scaleY *= 1.0;
-              }
-              mirror.scaling.y = scaleY;
-              mirror.parent = mirrorParent;
-
-              mirror.info = bar.info;
-
-              const type = (bar.info?.type || "DEFAULT").toUpperCase();
-              let mirrorColor = mirrorColors.ROOT;
-              if (bar.info?.name !== "")
-                mirrorColor = mirrorColors[type] || mirrorColors.DEFAULT;
-
-              const mat = new BABYLON.StandardMaterial(
-                mirror.name + "_mat",
-                this.scene
-              );
-              mat.diffuseColor = mirrorColor;
-              mirror.material = mat;
-
-              mirror.info = {
-                ...bar.info,
-                isMirror: true,
-              };
-
-              mirror.actionManager = new BABYLON.ActionManager(this.scene);
-              mirror.actionManager.registerAction(
-                new BABYLON.ExecuteCodeAction(
-                  BABYLON.ActionManager.OnPointerOverTrigger,
-                  () => {
-                    this.showTooltip(mirror.info);
-                  }
-                )
-              );
-              mirror.actionManager.registerAction(
-                new BABYLON.ExecuteCodeAction(
-                  BABYLON.ActionManager.OnPointerOverTrigger,
-                  () => {
-                    this.handleBarClick(mirror.info);
-                  }
-                )
-              );
-              mirror.actionManager.registerAction(
-                new BABYLON.ExecuteCodeAction(
-                  BABYLON.ActionManager.OnPointerOutTrigger,
-                  this.hideTooltip
-                )
-              );
-              this.cloneChildrenRecursively(bar, mirror, mirrorParent);
-            });
-        }
-        this.updateCamera(response.data.width, response.data.depth);
+        console.log(hierarchicalData);
+        this.plot([hierarchicalData]);
+        this.updateCamera(hierarchicalData.width, hierarchicalData.depth);
       })
       .catch((e) => {
         this.setState({ loading: false });
@@ -660,11 +411,37 @@ class App extends Component {
         console.error(e);
       });
 
-    // this.scene.freezeActiveMeshes();
-    this.scene.autoClear = false; // Color buffer
-    this.scene.autoClearDepthAndStencil = false; // Depth and stencil, obviously
-    this.scene.blockfreeActiveMeshesAndRenderingGroups = true;
-    this.scene.blockfreeActiveMeshesAndRenderingGroups = false;
+    // const request = json
+    //   ? axios.get(json)
+    //   : axios.get(endpoint, {
+    //       params: { q: repositoryName, b: branch, c: this.state.commit },
+    //     });
+    // request
+    //   .then((response) => {
+    //     this.setState({ loading: false });
+    //     this.reset();
+
+    //     if (response.data.children && response.data.children.length === 0) {
+    //       swal("Invalid project", "Only Go projects are allowed.", "error");
+    //     }
+    //     const limitedChildren = response.data.children
+    //       ? response.data.children.slice(0, 1)
+    //       : [];
+    //     // this.plot(limitedChildren);
+    //     this.plotLevel(limitedChildren);
+    //     this.updateCamera(response.data.width, response.data.depth);
+    //   })
+    //   .catch((e) => {
+    //     this.setState({ loading: false });
+    //     swal(
+    //       "Error during plot",
+    //       "Something went wrong during the plot. Try again later",
+    //       "error"
+    //     );
+    //     console.error(e);
+    //   });
+    this.scene.autoClear = false;
+    this.scene.autoClearDepthAndStencil = false;
   }
 
   onClick() {
@@ -865,6 +642,11 @@ class App extends Component {
               aria-label="close"
             ></button>
           </div>
+          {this.state.parentStack && this.state.parentStack.length > 0 && (
+            <button className="button is-warning" onClick={this.goBackLevel}>
+              Back
+            </button>
+          )}
         </header>
         <section className="canvas">
           {this.state.loading ? (

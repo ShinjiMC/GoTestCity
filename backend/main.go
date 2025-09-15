@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -9,11 +10,24 @@ import (
 	"github.com/shinjimc/gotestcity/pkg/server"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const (
 	defaultPort = 4000
+	MONGO_URI="mongodb://mongo:FDQCHbYyvKQeWYqUOpbVRlQzxSKkcYJg@gondola.proxy.rlwy.net:53028"
 )
+
+func connectMongo(uri string) (*mongo.Client, context.Context, context.CancelFunc, error) {
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+    if err != nil {
+        cancel()
+        return nil, nil, nil, fmt.Errorf("mongo connect: %w", err)
+    }
+    return client, ctx, cancel, nil
+}
 
 func main() {
 	log.SetLevel(log.InfoLevel)
@@ -44,15 +58,22 @@ func main() {
 					EnvVars: []string{"CACHE_TTL"},
 				},
 			},
-			Action: func(c *cli.Context) error {
-				analyzer := server.AnalyzerHandle{
-					Cache:     lib.NewCache(),
-					TmpFolder: os.TempDir(),
-					CacheTTL:  c.Duration("cache"),
-					Port:      c.Int("port"),
-				}
-				return analyzer.Serve()
-			},
+            Action: func(c *cli.Context) error {
+                client, _, cancel, err := connectMongo(MONGO_URI)	
+                if err != nil {
+                    return err
+                }
+                defer cancel()
+
+                analyzer := server.AnalyzerHandle{
+                    Cache:       lib.NewCache(),
+                    TmpFolder:   os.TempDir(),
+                    CacheTTL:    c.Duration("cache"),
+                    Port:        c.Int("port"),
+                    MongoClient: client,
+                }
+                return analyzer.Serve()
+            },
 		},
 		{
 			Name:        "open",
@@ -89,13 +110,20 @@ func main() {
 					local = true
 				}
 
-				analyzer := server.AnalyzerHandle{
-					Cache:       lib.NewCache(),
-					TmpFolder:   os.TempDir(),
-					Port:        c.Int("port"),
-					ProjectPath: &projectAddress,
-					Local:       local,
-				}
+				client, _, cancel, err := connectMongo(MONGO_URI)
+                if err != nil {
+                    return err
+                }
+                defer cancel()
+
+                analyzer := server.AnalyzerHandle{
+                    Cache:       lib.NewCache(),
+                    TmpFolder:   os.TempDir(),
+                    Port:        c.Int("port"),
+                    ProjectPath: &projectAddress,
+                    Local:       local,
+                    MongoClient: client,
+                }
 
 				if branch := c.String("branch"); branch != "" {
 					analyzer.Branch = &branch
@@ -106,6 +134,11 @@ func main() {
 		},
 	}
 
+	log.SetFormatter(&log.TextFormatter{
+		FullTimestamp: true,
+	})
+	log.SetOutput(os.Stdout)
+	log.SetLevel(log.InfoLevel)
 	if err := app.Run(os.Args); err != nil {
 		log.Error(err)
 	}
