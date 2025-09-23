@@ -15,6 +15,8 @@ import {
 import swal from "sweetalert2";
 import Cookies from "js-cookie";
 import PropTypes from "prop-types";
+import SidePanel from "./SidePanel";
+import Datos from "./Datos";
 
 const URLRegexp = new RegExp(/^(?:https:\/\/?)?(github\.com\/.*)/i);
 
@@ -27,28 +29,58 @@ const colors = {
   STRUCT: { start: { r: 100, g: 143, b: 255 }, end: { r: 60, g: 100, b: 200 } },
   ROOT: { start: { r: 160, g: 160, b: 160 }, end: { r: 100, g: 100, b: 100 } },
 };
+// === Datos de ejemplo (dos años de cobertura) ===
+const timelineData2 = [
+  // --- 2 años de datos cada 2-3 semanas ---
+  { date: "2023-09-10T12:00:00Z", coverage: 20 },
+  { date: "2023-09-28T15:00:00Z", coverage: 24 },
+  { date: "2023-10-15T10:00:00Z", coverage: 18 },
+  { date: "2023-11-02T14:00:00Z", coverage: 30 },
+  { date: "2023-11-18T18:00:00Z", coverage: 35 },
+  { date: "2023-12-05T12:00:00Z", coverage: 28 },
+  { date: "2023-12-23T09:00:00Z", coverage: 40 },
+  { date: "2024-01-08T16:00:00Z", coverage: 42 },
+  { date: "2024-01-25T11:00:00Z", coverage: 38 },
+  { date: "2024-02-12T13:00:00Z", coverage: 45 },
+  { date: "2024-03-01T15:00:00Z", coverage: 50 },
+  { date: "2024-03-20T09:00:00Z", coverage: 47 },
+  { date: "2024-04-08T14:00:00Z", coverage: 55 },
+  { date: "2024-04-25T12:00:00Z", coverage: 60 },
+  { date: "2024-05-12T17:00:00Z", coverage: 52 },
+  { date: "2024-05-30T10:00:00Z", coverage: 65 },
+  { date: "2024-06-16T14:00:00Z", coverage: 63 },
+  { date: "2024-07-04T12:00:00Z", coverage: 70 },
+  { date: "2024-07-21T16:00:00Z", coverage: 66 },
+  { date: "2024-08-08T15:00:00Z", coverage: 72 },
+  { date: "2024-08-26T11:00:00Z", coverage: 74 },
+  { date: "2024-09-12T13:00:00Z", coverage: 68 },
+  { date: "2024-09-29T14:00:00Z", coverage: 78 },
+  { date: "2024-10-17T12:00:00Z", coverage: 82 },
+  { date: "2024-11-03T16:00:00Z", coverage: 76 },
+  { date: "2024-11-21T09:00:00Z", coverage: 84 },
+  { date: "2024-12-08T15:00:00Z", coverage: 87 },
+  { date: "2024-12-26T12:00:00Z", coverage: 81 },
+  { date: "2025-01-13T14:00:00Z", coverage: 88 },
+  { date: "2025-01-31T10:00:00Z", coverage: 92 },
+  { date: "2025-02-17T16:00:00Z", coverage: 85 },
+  { date: "2025-03-06T12:00:00Z", coverage: 90 },
+  { date: "2025-03-23T14:00:00Z", coverage: 94 },
+  { date: "2025-04-10T15:00:00Z", coverage: 89 },
+  { date: "2025-04-28T11:00:00Z", coverage: 96 },
+  { date: "2025-05-15T13:00:00Z", coverage: 92 },
+  { date: "2025-06-02T15:00:00Z", coverage: 97 },
+  { date: "2025-06-20T09:00:00Z", coverage: 93 },
+  { date: "2025-07-07T14:00:00Z", coverage: 98 },
+  { date: "2025-07-25T12:00:00Z", coverage: 95 },
+  { date: "2025-08-11T16:00:00Z", coverage: 99 },
+  { date: "2025-08-29T10:00:00Z", coverage: 97 },
+  { date: "2025-09-15T12:00:00Z", coverage: 99 },
 
-const examples = [
-  {
-    branch: "master",
-    name: "sirupsen/logrus",
-    link: "github.com/sirupsen/logrus",
-  },
-  {
-    branch: "master",
-    name: "gin-gonic/gin",
-    link: "github.com/gin-gonic/gin",
-  },
-  {
-    branch: "master",
-    name: "spf13/cobra",
-    link: "github.com/spf13/cobra",
-  },
-  {
-    branch: "master",
-    name: "gohugoio/hugo",
-    link: "github.com/gohugoio/hugo",
-  },
+  // --- Varias mediciones en el día de HOY (2025-09-22) ---
+  { date: "2025-09-22T06:30:00Z", coverage: 95 },
+  { date: "2025-09-22T12:00:00Z", coverage: 97 },
+  { date: "2025-09-22T18:45:00Z", coverage: 92 },
+  { date: "2025-09-22T23:15:00Z", coverage: 96 },
 ];
 
 class App extends Component {
@@ -71,7 +103,17 @@ class App extends Component {
       commit: "HEAD",
       commits: [],
       selectedCommitDate: null,
+      isNightMode: false,
+      sidePanelOpen: false,
+      coverageGlobal: 0,
+      coverageRoot: 0,
+      coverageIncrease: 0,
+      timelineData: [],
+      rootInfo: null,
+      rootChildren: [],
+      parentStack: [],
     };
+    this.toggleMode = this.toggleMode.bind(this);
 
     this.addBlock = this.addBlock.bind(this);
     this.onInputChange = this.onInputChange.bind(this);
@@ -94,7 +136,37 @@ class App extends Component {
 
     this.bars = [];
   }
+  toggleMode() {
+    this.setState(
+      (prev) => ({ isNightMode: !prev.isNightMode }),
+      () => {
+        // Replotear la ciudad cuando cambia el modo
+        if (this.lastData) {
+          this.reset();
+          this.plot([this.lastData]);
+          this.updateCamera(this.lastData.width, this.lastData.depth);
+        }
+      }
+    );
+  }
 
+  openSidePanel = () => {
+    // Aquí podrías calcular datos reales
+    const randomGlobal = Math.floor(Math.random() * 100);
+    const randomRoot = Math.floor(Math.random() * 100);
+    const increase = randomGlobal - randomRoot;
+
+    this.setState({
+      sidePanelOpen: true,
+      coverageGlobal: randomGlobal,
+      coverageRoot: randomRoot,
+      coverageIncrease: increase,
+      timelineData: timelineData2,
+    });
+  };
+  closeSidePanel = () => {
+    this.setState({ sidePanelOpen: false });
+  };
   componentDidMount() {
     if (this.state.repository) {
       this.process(this.state.repository, "", this.state.branch);
@@ -139,13 +211,13 @@ class App extends Component {
 
     if (data.parent) {
       bar.parent = data.parent;
-
       var bounds = data.parent.getBoundingInfo();
       bar.position.y = bounds.maximum.y + data.height / 2.0;
     }
+
     bar.position.x = data.x || 0;
     bar.position.z = data.y || 0;
-
+    bar.relevantUrl = data.relevantUrl;
     bar.info = data.info;
 
     bar.actionManager = new BABYLON.ActionManager(this.scene);
@@ -165,45 +237,163 @@ class App extends Component {
       )
     );
 
+    bar.actionManager.registerAction(
+      new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPickTrigger, () => {
+        if (bar.relevantUrl) {
+          // console.log("Navigating to:", bar.relevantUrl);
+
+          this.setState(
+            (prev) => ({
+              parentStack: [
+                ...prev.parentStack,
+                prev.currentUrl || prev.rootInfo.url,
+              ],
+              currentUrl: bar.relevantUrl,
+            }),
+            () => {
+              const { repository, branch, commit } = this.state;
+              this.loadAndPlotProject(
+                bar.relevantUrl,
+                repository,
+                branch,
+                commit
+              );
+            }
+          );
+          console.log("Stack after push:", this.state.parentStack);
+        }
+      })
+    );
+
     // Material
     bar.material = new BABYLON.StandardMaterial(data.label + "mat", this.scene);
     bar.material.diffuseColor = data.color;
 
     bar.freezeWorldMatrix();
-
     return bar;
   };
 
-  plot(children, parent) {
-    if (!children) {
+  coverageToColor(coverage) {
+    // coverage: 0-100 → normalizado [0,1]
+    const t = Math.max(0, Math.min(coverage, 100)) / 100;
+
+    let r, g, b;
+
+    if (t < 1 / 3) {
+      // 🔴 rojo → 🟠 naranja
+      r = 255;
+      g = Math.round(128 * (t * 3)); // de 0 a ~128
+      b = 0;
+    } else if (t < 2 / 3) {
+      // 🟠 naranja → 🟡 amarillo
+      r = 255;
+      g = Math.round(128 + 127 * ((t - 1 / 3) * 3)); // de ~128 a 255
+      b = 0;
+    } else {
+      // 🟡 amarillo → ⚪ blanco
+      r = 255;
+      g = 255;
+      b = Math.round(255 * ((t - 2 / 3) * 3));
+    }
+
+    return { r, g, b };
+  }
+
+  assignCoverageColorsRecursive(nodes, parentTarget = null) {
+    if (!nodes || nodes.length === 0) return;
+
+    // Nivel raíz: hijos directos del root
+    if (parentTarget === null) {
+      nodes.forEach((node) => {
+        // coverage random base para hijos de root (40–100)
+        node.coverage = Math.floor(Math.random() * 61) + 40;
+        if (node.children) {
+          this.assignCoverageColorsRecursive(node.children, node.coverage);
+        }
+      });
       return;
     }
 
-    children.forEach((data) => {
-      var color = getProportionalColor(
-        colors[data.type].start,
-        colors[data.type].end,
-        Math.min(100, data.numberOfLines / 2000.0)
-      );
+    // ⚡ Si el padre es 100 → todos los hijos y su descendencia también
+    if (parentTarget === 100) {
+      nodes.forEach((node) => {
+        node.coverage = 100;
+        if (node.children) {
+          this.assignCoverageColorsRecursive(node.children, 100);
+        }
+      });
+      return;
+    }
 
-      // Determinar altura mínima
-      var minHeight = 10; // altura mínima para que siempre se vea
+    // Caso normal: ajustar para que el promedio ≈ parentTarget
+    const count = nodes.length;
+    const baseTarget = parentTarget;
+
+    // Generar valores aleatorios iniciales (0–100)
+    let raw = nodes.map(() => Math.floor(Math.random() * 101));
+
+    // Calcular factor de escala para que el promedio ≈ baseTarget
+    const currentAvg = raw.reduce((sum, v) => sum + v, 0) / Math.max(1, count);
+    const factor = currentAvg === 0 ? 0 : baseTarget / currentAvg;
+
+    // Ajustar y asignar
+    raw = raw.map((v) => Math.max(0, Math.min(100, Math.round(v * factor))));
+
+    nodes.forEach((node, i) => {
+      node.coverage = raw[i];
+      if (node.children) {
+        this.assignCoverageColorsRecursive(node.children, node.coverage);
+      }
+    });
+  }
+
+  plot(
+    children,
+    parent,
+    inheritedCoverage = null,
+    parentRelevantUrl = null,
+    level = 0,
+    rootUrl = null
+  ) {
+    if (!children) return;
+
+    children.forEach((data) => {
+      let color;
+      if (this.state.isNightMode) {
+        const covVal = data.coverage ?? inheritedCoverage ?? 50;
+        color = this.coverageToColor(covVal);
+      } else {
+        color = getProportionalColor(
+          colors[data.type].start,
+          colors[data.type].end,
+          Math.min(100, data.numberOfLines / 2000.0)
+        );
+      }
+
+      var minHeight = 10;
       var height =
         data.type === "ROOT"
-          ? 0 // root plano
-          : Math.max(data.numberOfMethods / 10, minHeight / 2); // packages y demás
-      if (data.type === "PACKAGE") {
-        var h_package = data.height ?? 10;
-        height = Math.max(h_package, minHeight);
+          ? 0
+          : Math.max(data.numberOfMethods / 10, minHeight / 2);
+      if (data.type === "PACKAGE")
+        height = Math.max(data.height ?? 10, minHeight);
+      if (data.type === "STRUCT") height = Math.max(data.height / 10, 1);
+
+      if (level === 0) rootUrl = data.url; // guardar URL del root
+
+      let relevantUrl;
+      if (level === 1) {
+        // Hijos directos del root
+        if (data.type === "STRUCT") {
+          relevantUrl = rootUrl; // usar URL del root
+        } else {
+          relevantUrl = data.url; // mantener propia URL
+        }
+      } else {
+        // Nivel 1+ → hereda URL del padre
+        relevantUrl = parentRelevantUrl;
       }
-      if (data.type === "STRUCT") {
-        // Asegurarse de tener al menos minHeight
-        height = Math.max(data.height / 2, 1);
-      }
-      // if (data.type === "ROOT") {
-      //   data.width = Math.max(data.width, 200);
-      //   data.depth = Math.max(data.depth, 200);
-      // }
+
       var mesh = this.addBlock({
         x: data.position.x,
         y: data.position.y,
@@ -220,6 +410,7 @@ class App extends Component {
           NOL: data.numberOfLines,
           NOA: data.numberOfAttributes,
         },
+        relevantUrl: relevantUrl,
       });
 
       if (parent) {
@@ -227,7 +418,14 @@ class App extends Component {
       }
 
       if (data.children && data.children.length > 0) {
-        this.plot(data.children, mesh);
+        this.plot(
+          data.children,
+          mesh,
+          data.coverage,
+          relevantUrl,
+          level + 1,
+          rootUrl
+        );
       }
     });
   }
@@ -258,7 +456,11 @@ class App extends Component {
   }
 
   initScene() {
-    this.scene.clearColor = new BABYLON.Color3(0.7, 0.7, 0.7);
+    const isNight = this.state?.isNightMode;
+    this.scene.clearColor = isNight
+      ? new BABYLON.Color3(0.05, 0.05, 0.1) // noche oscuro
+      : new BABYLON.Color3(0.7, 0.7, 0.7); // día gris claro
+    // this.scene.clearColor = new BABYLON.Color3(0.7, 0.7, 0.7);
 
     // Crear ArcRotateCamera con ángulos iniciales
     this.camera = new BABYLON.ArcRotateCamera(
@@ -319,8 +521,89 @@ class App extends Component {
     }
   }
 
+  loadAndPlotProject = (url, repositoryName, branch, commit) => {
+    if (!url) return;
+
+    this.setState({ loading: true });
+
+    axios
+      .get(endpoint, {
+        params: { q: repositoryName, b: branch, c: commit },
+      })
+      .then((response) => {
+        const rootJSON = response.data;
+        const rootURL = rootJSON.url || url;
+        const hierarchicalURL = `${endpoint}/hierarchical`;
+        return axios.get(hierarchicalURL, {
+          params: { q: repositoryName, b: branch, c: commit, key: rootURL },
+        });
+      })
+      .then((response) => {
+        this.setState({ loading: false });
+        this.reset();
+
+        const hierarchicalData = response.data;
+        if (
+          !hierarchicalData.children ||
+          hierarchicalData.children.length === 0
+        ) {
+          swal("Invalid project", "Only Go projects are allowed.", "error");
+          return;
+        }
+
+        const root = hierarchicalData;
+        const rootInfo = {
+          name: root.name || "Root",
+          type: root.type || "PACKAGE",
+          NOL: root.numberOfLines ?? 0,
+          NOM: root.numberOfMethods ?? 0,
+          NOA: root.numberOfAttributes ?? 0,
+          test: root.test ?? 0,
+          coverage: root.coverage ?? 0,
+          url: root.url || "",
+        };
+        const childrenNodes =
+          root.children?.map((c) => ({
+            name: c.name,
+            type: c.type,
+            coverage: c.coverage ?? 0,
+          })) || [];
+
+        this.setState({ rootInfo, rootChildren: childrenNodes });
+
+        this.lastData = hierarchicalData;
+        this.assignCoverageColorsRecursive([hierarchicalData]);
+        this.plot([hierarchicalData]);
+        this.updateCamera(hierarchicalData.width, hierarchicalData.depth);
+      })
+      .catch((e) => {
+        this.setState({ loading: false });
+        swal(
+          "Error during plot",
+          "Something went wrong during the plot. Try again later",
+          "error"
+        );
+        console.error(e);
+      });
+  };
+
+  goBackLevel = () => {
+    const stack = [...this.state.parentStack];
+    if (stack.length === 0) return;
+
+    const parentUrl = stack.pop();
+    console.log("stack after pop:", stack);
+    console.log("Navigating back to:", parentUrl);
+
+    this.setState({ parentStack: stack, currentUrl: parentUrl }, () => {
+      const { repository, branch, commit } = this.state;
+      this.loadAndPlotProject(parentUrl, repository, branch, commit);
+    });
+  };
+
   process(repository, json, branch) {
     if (!BABYLON.Engine.isSupported()) return;
+
     let repositoryName;
     if (repository === "local") repositoryName = "local";
     else {
@@ -359,57 +642,83 @@ class App extends Component {
     //     console.warn("Could not fetch commits:", err);
     //     this.setState({ commits: [] });
     //   });
+
     // 2. GET al endpoint base /api para obtener root JSON
-    axios
-      .get(endpoint, {
-        params: { q: repositoryName, b: branch, c: this.state.commit },
-      })
-      .then((response) => {
-        const rootJSON = response.data;
+    // axios
+    //   .get(endpoint, {
+    //     params: { q: repositoryName, b: branch, c: this.state.commit },
+    //   })
+    //   .then((response) => {
+    //     const rootJSON = response.data;
 
-        // 3. Generar la URL de hierarchical usando la URL raíz del proyecto
-        const rootURL =
-          rootJSON.url ||
-          // `https:///home/shinji/Escritorio/Proyectos/kubernetes/tree/master/home/shinji/Escritorio/Proyectos/kubernetes/pkg/apis/core`;
-          `https:///home/shinji/Escritorio/Proyectos/kubernetes/blob/master/home/shinji/Escritorio/Proyectos/kubernetes/pkg/apis/core/types.go`;
+    //     // 3. Generar la URL de hierarchical usando la URL raíz del proyecto
+    //     const rootURL =
+    //       rootJSON.url ||
+    //       // `https:///home/shinji/Escritorio/Proyectos/kubernetes/tree/master/home/shinji/Escritorio/Proyectos/kubernetes/pkg/apis/core/helper`;
+    //       `https:///home/shinji/Escritorio/Proyectos/kubernetes/tree/master/home/shinji/Escritorio/Proyectos/kubernetes/pkg/apis/core`;
+    //     // `https:///home/shinji/Escritorio/Proyectos/kubernetes/blob/master/home/shinji/Escritorio/Proyectos/kubernetes/pkg/apis/core/types.go`;
 
-        const hierarchicalURL = `${endpoint}/hierarchical`;
-        return axios.get(hierarchicalURL, {
-          params: {
-            q: repositoryName,
-            b: branch,
-            c: this.state.commit,
-            key: rootURL,
-          },
-        });
-      })
-      .then((response) => {
-        this.setState({ loading: false });
-        this.reset();
+    //     const hierarchicalURL = `${endpoint}/hierarchical`;
+    //     return axios.get(hierarchicalURL, {
+    //       params: {
+    //         q: repositoryName,
+    //         b: branch,
+    //         c: this.state.commit,
+    //         key: rootURL,
+    //       },
+    //     });
+    //   })
+    //   .then((response) => {
+    //     this.setState({ loading: false });
+    //     this.reset();
 
-        const hierarchicalData = response.data;
+    //     const hierarchicalData = response.data;
 
-        if (
-          !hierarchicalData.children ||
-          hierarchicalData.children.length === 0
-        ) {
-          swal("Invalid project", "Only Go projects are allowed.", "error");
-          return;
-        }
+    //     if (
+    //       !hierarchicalData.children ||
+    //       hierarchicalData.children.length === 0
+    //     ) {
+    //       swal("Invalid project", "Only Go projects are allowed.", "error");
+    //       return;
+    //     }
+    //     console.log("Hierarchical Data:", hierarchicalData);
+    //     const root = hierarchicalData;
+    //     const rootInfo = {
+    //       name: root.name || "Root",
+    //       type: root.type || "PACKAGE",
+    //       NOL: root.numberOfLines ?? 0,
+    //       NOM: root.numberOfMethods ?? 0,
+    //       NOA: root.numberOfAttributes ?? 0,
+    //       test: root.test ?? 0,
+    //       coverage: root.coverage ?? 0,
+    //       url: root.url || "", // si tu JSON lo tiene
+    //     };
+    //     const childrenNodes =
+    //       root.children?.map((c) => ({
+    //         name: c.name,
+    //         type: c.type,
+    //         coverage: c.coverage ?? 0,
+    //       })) || [];
+    //     this.setState({
+    //       rootInfo,
+    //       rootChildren: childrenNodes,
+    //     });
+    //     console.log("Root Data Extracted:", rootInfo);
 
-        console.log(hierarchicalData);
-        this.plot([hierarchicalData]);
-        this.updateCamera(hierarchicalData.width, hierarchicalData.depth);
-      })
-      .catch((e) => {
-        this.setState({ loading: false });
-        swal(
-          "Error during plot",
-          "Something went wrong during the plot. Try again later",
-          "error"
-        );
-        console.error(e);
-      });
+    //     this.lastData = hierarchicalData;
+    //     this.assignCoverageColorsRecursive([hierarchicalData]);
+    //     this.plot([hierarchicalData]);
+    //     this.updateCamera(hierarchicalData.width, hierarchicalData.depth);
+    //   })
+    //   .catch((e) => {
+    //     this.setState({ loading: false });
+    //     swal(
+    //       "Error during plot",
+    //       "Something went wrong during the plot. Try again later",
+    //       "error"
+    //     );
+    //     console.error(e);
+    //   });
 
     // const request = json
     //   ? axios.get(json)
@@ -440,6 +749,15 @@ class App extends Component {
     //     );
     //     console.error(e);
     //   });
+
+    const defaultURL = `https:///home/shinji/Escritorio/Proyectos/kubernetes/tree/master/home/shinji/Escritorio/Proyectos/kubernetes/pkg/apis/core`;
+    this.loadAndPlotProject(
+      defaultURL,
+      repositoryName,
+      branch,
+      this.state.commit
+    );
+
     this.scene.autoClear = false;
     this.scene.autoClearDepthAndStencil = false;
   }
@@ -517,11 +835,13 @@ class App extends Component {
             />
           </svg>
         </a>
-        <FloatBox
-          position={this.state.infoPosition}
-          info={this.state.infoData}
-          visible={this.state.infoVisible}
-        />
+        {!this.state.sidePanelOpen && (
+          <FloatBox
+            position={this.state.infoPosition}
+            info={this.state.infoData}
+            visible={this.state.infoVisible}
+          />
+        )}
         <header className="header">
           <div className="container">
             <Navbar />
@@ -599,23 +919,6 @@ class App extends Component {
                 </button>
               </div>
             </div>
-
-            <div className="level">
-              <small className="level-left">
-                Examples:{" "}
-                {examples.map((example) => (
-                  <button
-                    className="m-l-10 link-like-button"
-                    key={example.link}
-                    onClick={() => {
-                      this.process(example.link, example.json, example.branch);
-                    }}
-                  >
-                    {example.name}
-                  </button>
-                ))}
-              </small>
-            </div>
           </div>
           <div className={this.state.modalActive ? "modal is-active" : "modal"}>
             <div className="modal-background"></div>
@@ -642,25 +945,161 @@ class App extends Component {
               aria-label="close"
             ></button>
           </div>
+        </header>
+
+        <div className="relative h-screen p-2 bg-gray-200">
           {this.state.parentStack && this.state.parentStack.length > 0 && (
-            <button className="button is-warning" onClick={this.goBackLevel}>
-              Back
+            <button
+              onClick={this.goBackLevel}
+              className="absolute top-20 left-6 z-50
+               bg-gray-800 hover:bg-gray-700
+               text-white p-3 rounded-full shadow-lg
+               flex items-center justify-center
+               transition"
+              title="Volver al nivel anterior"
+              aria-label="Volver al nivel anterior"
+            >
+              {/* Icono de flecha hacia atrás */}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-6 h-6"
+              >
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
             </button>
           )}
-        </header>
-        <section className="canvas">
-          {this.state.loading ? (
-            <Loading message="Fetching repository..." />
-          ) : (
-            <BabylonScene
-              width={window.innerWidth}
-              engineOptions={{ preserveDrawingBuffer: true, stencil: true }}
-              onSceneMount={this.onSceneMount}
-            />
-          )}
-        </section>
-        <div className="footer-warning notification is-danger is-hidden-tablet is-paddingless is-marginless is-unselectable">
-          GoTestCity is best viewed on Desktop
+          {/* --- Botón Modo Día/Noche --- */}
+          <button
+            onClick={this.toggleMode}
+            className="absolute top-6 left-6 z-50
+             bg-gray-800 hover:bg-gray-700
+             text-white p-3 rounded-full shadow-lg
+             flex items-center justify-center
+             transition"
+            title={
+              this.state.isNightMode
+                ? "Cambiar a modo Día"
+                : "Cambiar a modo Noche"
+            }
+            aria-label={
+              this.state.isNightMode
+                ? "Cambiar a modo Día"
+                : "Cambiar a modo Noche"
+            }
+          >
+            {this.state.isNightMode ? (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-6 h-6"
+              >
+                <circle cx="12" cy="12" r="5" />
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+              </svg>
+            ) : (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-6 h-6"
+              >
+                <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+              </svg>
+            )}
+          </button>
+          {/* --- Botón flotante --- */}
+          <button
+            onClick={
+              this.state.sidePanelOpen
+                ? this.closeSidePanel
+                : this.openSidePanel
+            }
+            className="absolute top-6 right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-full shadow-lg flex items-center gap-2 transition"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+              className="w-5 h-5"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3 3v18h18M7 13h10M7 9h10M7 17h10"
+              />
+            </svg>
+            {this.state.sidePanelOpen ? "Hide Analytics" : "Show Analytics"}
+          </button>
+          {/* --- Contenedor principal con transición --- */}
+          <div className="flex flex-row h-full bg-white rounded-xl shadow-lg overflow-hidden transition-all duration-500 ease-in-out">
+            {/* --- Sección izquierda (Babylon + Datos) --- */}
+            <div
+              className={`flex flex-col flex-[1] min-w-0 h-full gap-0 transition-all duration-500 ease-in-out ${
+                this.state.sidePanelOpen ? "flex-[1]" : "flex-[1] w-full"
+              }`}
+            >
+              {/* --- Babylon ocupa siempre el espacio --- */}
+              <section
+                className={`canvas bg-black flex items-center justify-center w-full transition-all duration-500 ease-in-out ${
+                  this.state.sidePanelOpen
+                    ? "flex-1 rounded-tl-xl"
+                    : "flex-1 rounded-xl"
+                }`}
+              >
+                {this.state.loading ? (
+                  <Loading message="Fetching repository..." />
+                ) : (
+                  <BabylonScene
+                    engineOptions={{
+                      preserveDrawingBuffer: true,
+                      stencil: true,
+                    }}
+                    onSceneMount={this.onSceneMount}
+                  />
+                )}
+              </section>
+
+              {/* --- Datos --- */}
+              {this.state.sidePanelOpen && (
+                <section className="flex-1 overflow-y-auto bg-gray-100 w-full rounded-bl-xl transition-opacity duration-300">
+                  <Datos
+                    info={this.state.rootInfo}
+                    childrenNodes={this.state.rootChildren}
+                  />
+                </section>
+              )}
+            </div>
+
+            {/* --- Panel lateral --- */}
+            {this.state.sidePanelOpen && (
+              <aside className="flex-[1] min-w-[50%] bg-gray-900 text-white p-4 overflow-y-auto  border-gray-300 transition-opacity duration-300">
+                <SidePanel
+                  coverageGlobal={this.state.coverageGlobal}
+                  coverageRoot={this.state.coverageRoot}
+                  coverageIncrease={this.state.coverageIncrease}
+                  timelineData={this.state.timelineData}
+                  onClose={this.closeSidePanel}
+                />
+              </aside>
+            )}
+          </div>
         </div>
         <Legend />
       </main>
