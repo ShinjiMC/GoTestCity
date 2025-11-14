@@ -1,3 +1,4 @@
+// src/FloatBox.js
 import React from "react";
 import { openGithubEvent } from "./utils";
 import PropTypes from "prop-types";
@@ -7,7 +8,6 @@ const FloatBox = ({ position, info, visible }) => {
 
   return (
     <div
-      // Posiciona de forma absoluta y muy arriba en el stack
       className="fixed z-[9999] pointer-events-auto"
       style={{
         left: position.x,
@@ -19,29 +19,24 @@ const FloatBox = ({ position, info, visible }) => {
         role="tooltip"
       >
         <h4 className="font-bold text-sm mb-2">
-          {info.name || "Root"} [{info.type}]
+          {info.name || "Elemento"} [{info.type}]
         </h4>
-
-        {info.type !== "PACKAGE" && (
+        {info.type !== "ROOT" && (
           <div className="text-xs space-y-1">
             <p>
-              <b>Lines:</b> {info.NOL}
+              <b>Lines:</b> {info.NOL ?? "..."}
             </p>
             <p>
-              <b>Methods:</b> {info.NOM}
+              <b>Methods:</b> {info.NOM ?? "..."}
             </p>
             <p>
-              <b>Attributes:</b> {info.NOA}
+              <b>Functions:</b> {info.NOA ?? "..."}
             </p>
             <p>
-              <b>Number of Tests:</b> {info.test}
-            </p>
-            <p>
-              <b>Test Coverage:</b> {info.coverage}
+              <b>Coverage:</b> {info.coverage?.toFixed(1) ?? "..."}%
             </p>
           </div>
         )}
-
         {info.url && (
           <a
             href={info.url}
@@ -101,8 +96,8 @@ FloatBox.propTypes = {
     name: PropTypes.string,
     type: PropTypes.string,
     url: PropTypes.string,
-    test: PropTypes.number,
     coverage: PropTypes.number,
+    path: PropTypes.string,
   }),
   visible: PropTypes.bool,
 };

@@ -7,6 +7,7 @@ import "chartjs-adapter-date-fns";
 SidePanel.propTypes = {
   coverageGlobal: PropTypes.number.isRequired,
   coverageRoot: PropTypes.number.isRequired,
+  coverageIncrease: PropTypes.number.isRequired,
   timelineData: PropTypes.arrayOf(
     PropTypes.shape({
       date: PropTypes.string.isRequired,
@@ -28,6 +29,7 @@ function groupByDayKeepLast(data) {
 export default function SidePanel({
   coverageGlobal,
   coverageRoot,
+  coverageIncrease,
   timelineData,
   onClose,
 }) {
@@ -35,7 +37,12 @@ export default function SidePanel({
 
   const filteredData = useMemo(() => {
     if (range === "all") return timelineData;
-    const now = Date.now();
+    if (timelineData.length === 0) return []; // No hay datos para filtrar
+
+    // <--- Usar la fecha del último punto de datos como el "final" del timeline
+    const lastDataPoint = timelineData[timelineData.length - 1];
+    const endpointDate = Date.parse(lastDataPoint.date);
+
     let days = 0;
     switch (range) {
       case "day":
@@ -59,30 +66,41 @@ export default function SidePanel({
       default:
         return timelineData;
     }
-    const cutoff = now - days * 24 * 60 * 60 * 1000;
+    const cutoff = endpointDate - days * 24 * 60 * 60 * 1000;
     return timelineData.filter((d) => Date.parse(d.date) >= cutoff);
   }, [range, timelineData]);
 
   const dynamicIncrease = useMemo(() => {
+    if (range === "all") return coverageIncrease;
+    // Opcional: calcular dinámicamente si no es 'all'
     if (filteredData.length < 2) return 0;
     const first = filteredData[0].coverage;
     const last = filteredData[filteredData.length - 1].coverage;
     return +(last - first).toFixed(1);
-  }, [filteredData]);
+  }, [coverageIncrease, range, filteredData]);
 
   const extendedData = useMemo(() => {
-    const nowISO = new Date().toISOString();
+    // --- MODIFICACIÓN: 'nowISO' ya no es necesario aquí ---
+    // const nowISO = new Date().toISOString();
 
+    const endpointDateMs =
+      timelineData.length > 0
+        ? Date.parse(timelineData[timelineData.length - 1].date)
+        : Date.now(); // Fallback si no hay datos
+
+    // Si filteredData está vacío (lo cual solo pasa si timelineData está vacío)
     if (filteredData.length === 0) {
       if (timelineData.length === 0) return [];
-      const lastAll = timelineData[timelineData.length - 1];
-      return [lastAll, { date: nowISO, coverage: lastAll.coverage }];
+      // --- MODIFICACIÓN: No extender a 'nowISO' ---
+      // Simplemente devuelve los datos filtrados (que están vacíos)
+      return [];
     }
 
     let data = [...filteredData];
 
     if (range !== "all") {
-      const now = new Date();
+      const endpoint = new Date(endpointDateMs);
+
       let days = 0;
       switch (range) {
         case "day":
@@ -108,9 +126,12 @@ export default function SidePanel({
       }
 
       if (days > 0) {
-        const minDate = new Date(now - days * 24 * 60 * 60 * 1000);
+        const minDate = new Date(
+          endpoint.getTime() - days * 24 * 60 * 60 * 1000
+        );
+
         const beforeMin = [...timelineData]
-          .filter((d) => Date.parse(d.date) <= minDate)
+          .filter((d) => Date.parse(d.date) <= minDate.getTime())
           .pop();
 
         if (beforeMin) {
@@ -136,13 +157,17 @@ export default function SidePanel({
       data = groupByDayKeepLast(data);
     }
 
-    const last = data[data.length - 1];
-    const lastDate = Date.parse(last.date);
-    const diffHours = (Date.now() - lastDate) / 3600000;
+    // --- MODIFICACIÓN: Eliminada la lógica que añade el punto "actualidad" (hoy) ---
+    // const last = data.length > 0 ? data[data.length - 1] : null;
+    // if (!last) return [];
+    // const lastDate = Date.parse(last.date);
+    // const diffHours = (Date.now() - lastDate) / 3600000;
+    // return diffHours > 1
+    //   ? [...data, { date: nowISO, coverage: last.coverage }]
+    //   : data;
 
-    return diffHours > 1
-      ? [...data, { date: nowISO, coverage: last.coverage }]
-      : data;
+    // Devuelve solo los datos procesados
+    return data;
   }, [filteredData, timelineData, range]);
 
   const lineData = {
@@ -197,13 +222,23 @@ export default function SidePanel({
         min:
           range === "7d"
             ? (() => {
-                const now = new Date();
-                const d = new Date(now);
+                const endpoint =
+                  timelineData.length > 0
+                    ? new Date(timelineData[timelineData.length - 1].date)
+                    : new Date();
+                const d = new Date(endpoint); // <-- Usar endpoint
                 d.setDate(d.getDate() - 6);
                 return d;
               })()
             : undefined,
-        max: range === "7d" ? new Date() : undefined,
+
+        // --- MODIFICACIÓN: No forzar el máximo a 'new Date()' ---
+        max:
+          range === "7d"
+            ? timelineData.length > 0
+              ? new Date(timelineData[timelineData.length - 1].date)
+              : undefined
+            : undefined,
       },
     },
     plugins: {
@@ -273,7 +308,13 @@ export default function SidePanel({
 
       <h3 className="text-md font-semibold mb-2">Evolución en el tiempo</h3>
       <div className="h-64">
-        <Line data={lineData} options={options} />
+        {timelineData.length > 0 ? (
+          <Line data={lineData} options={options} />
+        ) : (
+          <div className="flex items-center justify-center h-full text-gray-500">
+            No hay datos de timeline disponibles.
+          </div>
+        )}
       </div>
     </div>
   );

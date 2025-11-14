@@ -1,13 +1,21 @@
+// src/index.js
 import React from "react";
 import ReactDOM from "react-dom";
 import "./index.css";
-import App from "./App";
-import { HashRouter, Route } from "react-router-dom";
+import { BrowserRouter, Route, Switch } from "react-router-dom";
+
+import HomePage from "./HomePage";
+import ProcessingPage from "./ProcessingPage";
+import VisualizationPage from "./VisualizationPage";
 
 const Root = () => (
-  <HashRouter basename={process.env.PUBLIC_URL}>
-    <Route exact path="/:repository*" component={App} />
-  </HashRouter>
+  <BrowserRouter basename={process.env.PUBLIC_URL}>
+    <Switch>
+      <Route path="/view/:repository*" component={VisualizationPage} />
+      <Route exact path="/process" component={ProcessingPage} />
+      <Route exact path="/" component={HomePage} />
+    </Switch>
+  </BrowserRouter>
 );
 
 ReactDOM.render(<Root />, document.getElementById("root"));

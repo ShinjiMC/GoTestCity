@@ -1,3 +1,4 @@
+// App.js
 import React, { Component } from "react";
 import FloatBox from "./FloatBox";
 import * as BABYLON from "babylonjs";
@@ -13,14 +14,14 @@ import {
   logoBase64,
 } from "./utils";
 import swal from "sweetalert2";
-import Cookies from "js-cookie";
+// import Cookies from "js-cookie"; // Ya no es necesario para el endpoint
 import PropTypes from "prop-types";
 import SidePanel from "./SidePanel";
 import Datos from "./Datos";
 
 const URLRegexp = new RegExp(/^(?:https:\/\/?)?(github\.com\/.*)/i);
 
-const endpoint = Cookies.get("gocity_api") || process.env.REACT_APP_API_URL;
+const endpoint = "http://localhost:3000/api/layout";
 
 // TODO: isolate in the constants file
 const colors = {
@@ -75,8 +76,6 @@ const timelineData2 = [
   { date: "2025-08-11T16:00:00Z", coverage: 99 },
   { date: "2025-08-29T10:00:00Z", coverage: 97 },
   { date: "2025-09-15T12:00:00Z", coverage: 99 },
-
-  // --- Varias mediciones en el día de HOY (2025-09-22) ---
   { date: "2025-09-22T06:30:00Z", coverage: 95 },
   { date: "2025-09-22T12:00:00Z", coverage: 97 },
   { date: "2025-09-22T18:45:00Z", coverage: 92 },
@@ -100,7 +99,7 @@ class App extends Component {
         "github.com/ShinjiMC/Golang_Exercises_Course",
       branch: this.props.match.params.branch || "master",
       modalActive: false,
-      commit: "HEAD",
+      commit: "f779cf6381917267aa54460b7e66b9a7cc165677",
       commits: [],
       selectedCommitDate: null,
       isNightMode: false,
@@ -112,9 +111,9 @@ class App extends Component {
       rootInfo: null,
       rootChildren: [],
       parentStack: [],
+      currentPath: "/",
     };
     this.toggleMode = this.toggleMode.bind(this);
-
     this.addBlock = this.addBlock.bind(this);
     this.onInputChange = this.onInputChange.bind(this);
     this.onClick = this.onClick.bind(this);
@@ -133,7 +132,6 @@ class App extends Component {
     this.closeModal = this.closeModal.bind(this);
     this.getBadgeValue = this.getBadgeValue.bind(this);
     this.saveAsPng = this.saveAsPng.bind(this);
-
     this.bars = [];
   }
   toggleMode() {
@@ -217,7 +215,7 @@ class App extends Component {
 
     bar.position.x = data.x || 0;
     bar.position.z = data.y || 0;
-    bar.relevantUrl = data.relevantUrl;
+    bar.relevantUrl = data.info.path;
     bar.info = data.info;
 
     bar.actionManager = new BABYLON.ActionManager(this.scene);
@@ -239,36 +237,27 @@ class App extends Component {
 
     bar.actionManager.registerAction(
       new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPickTrigger, () => {
-        if (bar.relevantUrl) {
-          // console.log("Navigating to:", bar.relevantUrl);
-
+        if (bar.info.type === "PACKAGE" && bar.relevantUrl !== "/") {
           this.setState(
             (prev) => ({
-              parentStack: [
-                ...prev.parentStack,
-                prev.currentUrl || prev.rootInfo.url,
-              ],
-              currentUrl: bar.relevantUrl,
+              parentStack: [...prev.parentStack, prev.currentPath],
+              currentPath: bar.relevantUrl, // El nuevo path es el 'relevantUrl'
             }),
             () => {
               const { repository, branch, commit } = this.state;
               this.loadAndPlotProject(
-                bar.relevantUrl,
+                bar.relevantUrl, // Pasamos el pathKey
                 repository,
                 branch,
                 commit
               );
             }
           );
-          console.log("Stack after push:", this.state.parentStack);
         }
       })
     );
-
-    // Material
     bar.material = new BABYLON.StandardMaterial(data.label + "mat", this.scene);
     bar.material.diffuseColor = data.color;
-
     bar.freezeWorldMatrix();
     return bar;
   };
@@ -347,14 +336,7 @@ class App extends Component {
     });
   }
 
-  plot(
-    children,
-    parent,
-    inheritedCoverage = null,
-    parentRelevantUrl = null,
-    level = 0,
-    rootUrl = null
-  ) {
+  plot(children, parent, inheritedCoverage = null) {
     if (!children) return;
 
     children.forEach((data) => {
@@ -363,13 +345,16 @@ class App extends Component {
         const covVal = data.coverage ?? inheritedCoverage ?? 50;
         color = this.coverageToColor(covVal);
       } else {
-        color = getProportionalColor(
-          colors[data.type].start,
-          colors[data.type].end,
-          Math.min(100, data.numberOfLines / 2000.0)
-        );
+        if (data.type === "ROOT") {
+          color = colors[data.type].start;
+        } else {
+          color = getProportionalColor(
+            colors[data.type].start,
+            colors[data.type].end,
+            Math.min(100, data.numberOfLines / 2000.0)
+          );
+        }
       }
-
       var minHeight = 10;
       var height =
         data.type === "ROOT"
@@ -377,22 +362,6 @@ class App extends Component {
           : Math.max(data.numberOfMethods / 10, minHeight / 2);
       if (data.type === "PACKAGE")
         height = Math.max(data.height ?? 10, minHeight);
-      if (data.type === "STRUCT") height = Math.max(data.height / 10, 1);
-
-      if (level === 0) rootUrl = data.url; // guardar URL del root
-
-      let relevantUrl;
-      if (level === 1) {
-        // Hijos directos del root
-        if (data.type === "STRUCT") {
-          relevantUrl = rootUrl; // usar URL del root
-        } else {
-          relevantUrl = data.url; // mantener propia URL
-        }
-      } else {
-        // Nivel 1+ → hereda URL del padre
-        relevantUrl = parentRelevantUrl;
-      }
 
       var mesh = this.addBlock({
         x: data.position.x,
@@ -404,13 +373,15 @@ class App extends Component {
         parent: parent,
         info: {
           name: data.name,
+          path: data.path,
           url: data.url,
           type: data.type,
           NOM: data.numberOfMethods,
           NOL: data.numberOfLines,
           NOA: data.numberOfAttributes,
+          test: data.test,
+          coverage: data.coverage,
         },
-        relevantUrl: relevantUrl,
       });
 
       if (parent) {
@@ -418,39 +389,23 @@ class App extends Component {
       }
 
       if (data.children && data.children.length > 0) {
-        this.plot(
-          data.children,
-          mesh,
-          data.coverage,
-          relevantUrl,
-          level + 1,
-          rootUrl
-        );
+        this.plot(data.children, mesh, data.coverage);
       }
     });
   }
 
   updateCamera(width, depth) {
     if (!this.camera) return;
-
     const centerX = 0;
     const centerZ = 0;
-
-    // Mantener la altura de la cámara proporcional al tamaño de la ciudad
     const maxDimension = Math.max(width, depth);
     const radius = maxDimension * 1.5;
-
     this.camera.setTarget(new BABYLON.Vector3(centerX, 0, centerZ));
-
     this.camera.alpha = -Math.PI / 4;
     this.camera.beta = Math.PI / 4;
-
     this.camera.radius = radius;
-
     this.camera.minZ = 1; // cercano
     this.camera.maxZ = radius * 10; // o un valor mayor que tu radio máximo
-
-    // Optional: fijar límites dinámicos según tamaño
     this.camera.lowerRadiusLimit = maxDimension * 0.5; // zoom mínimo
     this.camera.upperRadiusLimit = maxDimension * 5; // zoom máximo
   }
@@ -521,33 +476,33 @@ class App extends Component {
     }
   }
 
-  loadAndPlotProject = (url, repositoryName, branch, commit) => {
-    if (!url) return;
+  loadAndPlotProject = (pathKey, repositoryName, branch, commit) => {
+    if (!pathKey) return;
 
     this.setState({ loading: true });
 
+    // Llama al nuevo endpoint /hierarchical
+    const hierarchicalURL = `${endpoint}/hierarchical`;
+    const params = {
+      q: repositoryName,
+      b: branch,
+      c: commit,
+      key: pathKey,
+    };
+    const fullURL = `${hierarchicalURL}?c=${params.c}&key=${params.key}&q=${params.q}&b=${params.b}`;
+    console.log("[DEBUG] Petición GET a:", fullURL);
     axios
-      .get(endpoint, {
-        params: { q: repositoryName, b: branch, c: commit },
-      })
-      .then((response) => {
-        const rootJSON = response.data;
-        const rootURL = rootJSON.url || url;
-        const hierarchicalURL = `${endpoint}/hierarchical`;
-        return axios.get(hierarchicalURL, {
-          params: { q: repositoryName, b: branch, c: commit, key: rootURL },
-        });
-      })
+      .get(hierarchicalURL, { params })
       .then((response) => {
         this.setState({ loading: false });
         this.reset();
 
         const hierarchicalData = response.data;
         if (
-          !hierarchicalData.children ||
-          hierarchicalData.children.length === 0
+          !hierarchicalData ||
+          !hierarchicalData.type // Verificar si es un nodo válido
         ) {
-          swal("Invalid project", "Only Go projects are allowed.", "error");
+          swal("Invalid project", "No layout data found.", "error");
           return;
         }
 
@@ -560,7 +515,7 @@ class App extends Component {
           NOA: root.numberOfAttributes ?? 0,
           test: root.test ?? 0,
           coverage: root.coverage ?? 0,
-          url: root.url || "",
+          url: root.url || "", // url ahora es el path
         };
         const childrenNodes =
           root.children?.map((c) => ({
@@ -580,7 +535,8 @@ class App extends Component {
         this.setState({ loading: false });
         swal(
           "Error during plot",
-          "Something went wrong during the plot. Try again later",
+          e.response?.data?.error ||
+            "Something went wrong during the plot. Try again later",
           "error"
         );
         console.error(e);
@@ -591,13 +547,13 @@ class App extends Component {
     const stack = [...this.state.parentStack];
     if (stack.length === 0) return;
 
-    const parentUrl = stack.pop();
+    const parentPath = stack.pop(); // Saca el path padre (ej: "/")
     console.log("stack after pop:", stack);
-    console.log("Navigating back to:", parentUrl);
+    console.log("Navigating back to:", parentPath);
 
-    this.setState({ parentStack: stack, currentUrl: parentUrl }, () => {
+    this.setState({ parentStack: stack, currentPath: parentPath }, () => {
       const { repository, branch, commit } = this.state;
-      this.loadAndPlotProject(parentUrl, repository, branch, commit);
+      this.loadAndPlotProject(parentPath, repository, branch, commit);
     });
   };
 
@@ -612,9 +568,8 @@ class App extends Component {
         swal("Invalid URL", "Please inform a valid Github URL.", "error");
         return;
       }
-
       if (
-        match !== this.props.match.params.repository ||
+        match[1] !== this.props.match.params.repository ||
         branch !== this.props.match.params.branch
       ) {
         this.props.history.push(`/${match[1]}/#/${branch}`);
@@ -622,137 +577,14 @@ class App extends Component {
       repositoryName = match[1];
     }
 
-    this.setState({ repository: repositoryName, loading: true });
+    this.setState({
+      repository: repositoryName,
+      loading: true,
+      currentPath: "/",
+    });
 
-    // const [user, repo] = repositoryName.replace("github.com/", "").split("/");
-    // axios
-    //   .get(`https://api.github.com/repos/${user}/${repo}/commits`, {
-    //     params: { sha: branch, per_page: 1000000 },
-    //   })
-    //   .then((res) => {
-    //     this.setState({ commits: res.data });
-    //     const selectedCommit = this.state.commit;
-    //     const commitInfo = res.data.find((c) =>
-    //       c.sha.startsWith(selectedCommit)
-    //     );
-    //     const commitDate = commitInfo ? commitInfo.commit.author.date : null;
-    //     this.setState({ selectedCommitDate: commitDate });
-    //   })
-    //   .catch((err) => {
-    //     console.warn("Could not fetch commits:", err);
-    //     this.setState({ commits: [] });
-    //   });
-
-    // 2. GET al endpoint base /api para obtener root JSON
-    // axios
-    //   .get(endpoint, {
-    //     params: { q: repositoryName, b: branch, c: this.state.commit },
-    //   })
-    //   .then((response) => {
-    //     const rootJSON = response.data;
-
-    //     // 3. Generar la URL de hierarchical usando la URL raíz del proyecto
-    //     const rootURL =
-    //       rootJSON.url ||
-    //       // `https:///home/shinji/Escritorio/Proyectos/kubernetes/tree/master/home/shinji/Escritorio/Proyectos/kubernetes/pkg/apis/core/helper`;
-    //       `https:///home/shinji/Escritorio/Proyectos/kubernetes/tree/master/home/shinji/Escritorio/Proyectos/kubernetes/pkg/apis/core`;
-    //     // `https:///home/shinji/Escritorio/Proyectos/kubernetes/blob/master/home/shinji/Escritorio/Proyectos/kubernetes/pkg/apis/core/types.go`;
-
-    //     const hierarchicalURL = `${endpoint}/hierarchical`;
-    //     return axios.get(hierarchicalURL, {
-    //       params: {
-    //         q: repositoryName,
-    //         b: branch,
-    //         c: this.state.commit,
-    //         key: rootURL,
-    //       },
-    //     });
-    //   })
-    //   .then((response) => {
-    //     this.setState({ loading: false });
-    //     this.reset();
-
-    //     const hierarchicalData = response.data;
-
-    //     if (
-    //       !hierarchicalData.children ||
-    //       hierarchicalData.children.length === 0
-    //     ) {
-    //       swal("Invalid project", "Only Go projects are allowed.", "error");
-    //       return;
-    //     }
-    //     console.log("Hierarchical Data:", hierarchicalData);
-    //     const root = hierarchicalData;
-    //     const rootInfo = {
-    //       name: root.name || "Root",
-    //       type: root.type || "PACKAGE",
-    //       NOL: root.numberOfLines ?? 0,
-    //       NOM: root.numberOfMethods ?? 0,
-    //       NOA: root.numberOfAttributes ?? 0,
-    //       test: root.test ?? 0,
-    //       coverage: root.coverage ?? 0,
-    //       url: root.url || "", // si tu JSON lo tiene
-    //     };
-    //     const childrenNodes =
-    //       root.children?.map((c) => ({
-    //         name: c.name,
-    //         type: c.type,
-    //         coverage: c.coverage ?? 0,
-    //       })) || [];
-    //     this.setState({
-    //       rootInfo,
-    //       rootChildren: childrenNodes,
-    //     });
-    //     console.log("Root Data Extracted:", rootInfo);
-
-    //     this.lastData = hierarchicalData;
-    //     this.assignCoverageColorsRecursive([hierarchicalData]);
-    //     this.plot([hierarchicalData]);
-    //     this.updateCamera(hierarchicalData.width, hierarchicalData.depth);
-    //   })
-    //   .catch((e) => {
-    //     this.setState({ loading: false });
-    //     swal(
-    //       "Error during plot",
-    //       "Something went wrong during the plot. Try again later",
-    //       "error"
-    //     );
-    //     console.error(e);
-    //   });
-
-    // const request = json
-    //   ? axios.get(json)
-    //   : axios.get(endpoint, {
-    //       params: { q: repositoryName, b: branch, c: this.state.commit },
-    //     });
-    // request
-    //   .then((response) => {
-    //     this.setState({ loading: false });
-    //     this.reset();
-
-    //     if (response.data.children && response.data.children.length === 0) {
-    //       swal("Invalid project", "Only Go projects are allowed.", "error");
-    //     }
-    //     const limitedChildren = response.data.children
-    //       ? response.data.children.slice(0, 1)
-    //       : [];
-    //     // this.plot(limitedChildren);
-    //     this.plotLevel(limitedChildren);
-    //     this.updateCamera(response.data.width, response.data.depth);
-    //   })
-    //   .catch((e) => {
-    //     this.setState({ loading: false });
-    //     swal(
-    //       "Error during plot",
-    //       "Something went wrong during the plot. Try again later",
-    //       "error"
-    //     );
-    //     console.error(e);
-    //   });
-
-    const defaultURL = `https:///home/shinji/Escritorio/Proyectos/kubernetes/tree/master/home/shinji/Escritorio/Proyectos/kubernetes/pkg/apis/core`;
     this.loadAndPlotProject(
-      defaultURL,
+      "/", // Cargar el path raíz
       repositoryName,
       branch,
       this.state.commit
